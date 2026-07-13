@@ -6,6 +6,7 @@
   <meta name="description" content="Leather：面向信息学竞赛生的代码模板库、在线对拍与分层任务导图。">
   <meta name="theme-color" content="#f5f1e8">
   <title>Leather · 竞赛代码工作台</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" integrity="sha384-5TcZemv2l/9On385z///+d7MSYlvIEw9FuZTIdZ14vJLqWphw7e7ZPuOiCHJcFCP" crossorigin="anonymous">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -20,6 +21,8 @@
         <a href="#vault" data-page="vault"><span class="nav-icon">◇</span><span>模板库</span></a>
         <a href="#stress" data-page="stress"><span class="nav-icon">⇄</span><span>代码对拍</span></a>
         <a href="#roadmap" data-page="roadmap"><span class="nav-icon">⌁</span><span>任务导图</span></a>
+        <a href="#blogs" data-page="blogs"><span class="nav-icon">✎</span><span>我的博客</span></a>
+        <a href="#square" data-page="square"><span class="nav-icon">▦</span><span>文章广场</span></a>
       </nav>
       <div class="sidebar-foot">
         <div class="status-dot"></div>
@@ -42,7 +45,7 @@
           <div class="hero-copy">
             <span class="eyebrow">FOR OI / ICPC LEARNERS</span>
             <h1>把散落的代码、验证<br>和计划，收回一个工作台。</h1>
-            <p>Leather 是一个无需登录、开箱即用的竞赛辅助站。模板加密保存在本地，对拍专注于发现边界错误，任务导图帮你看清真正优先的事。</p>
+            <p>Leather 是一个无需登录、开箱即用的竞赛辅助站。模板加密保存在本地，对拍专注于发现边界错误，任务导图与博客帮你沉淀训练过程。</p>
             <div class="hero-actions">
               <a class="btn primary" href="#vault">建立我的模板库 <span>→</span></a>
               <a class="btn ghost" href="#stress">开始一次对拍</a>
@@ -67,7 +70,7 @@
         </div>
 
         <div class="section-heading">
-          <div><span class="eyebrow">ONE DESK, THREE TOOLS</span><h2>为训练中的真实痛点而做</h2></div>
+          <div><span class="eyebrow">ONE DESK, FIVE TOOLS</span><h2>为训练中的真实痛点而做</h2></div>
           <p>没有帐号体系，没有云端依赖。打开网页，就能继续上次的工作。</p>
         </div>
         <div class="feature-grid">
@@ -85,6 +88,16 @@
             <span class="feature-no">03</span><div class="feature-icon">◎</div>
             <h3>分层任务导图</h3><p>把最重要的事放在最上层。每层容纳多个任务，拖动调整顺序，训练重点一眼可见。</p>
             <ul><li>按层表达优先级</li><li>任务可跨层移动</li><li>自动统计完成进度</li></ul><b class="card-link">规划训练任务 →</b>
+          </a>
+          <a class="feature-card tone-green" href="#blogs">
+            <span class="feature-no">04</span><div class="feature-icon"># ✎</div>
+            <h3>Markdown 博客</h3><p>记录题解、训练总结与算法笔记。公开或私有由你决定，Markdown 与 LaTeX 公式即时预览。</p>
+            <ul><li>私有与公开可见性</li><li>安全 Markdown 渲染</li><li>KaTeX 数学公式</li></ul><b class="card-link">开始写博客 →</b>
+          </a>
+          <a class="feature-card tone-orange" href="#square">
+            <span class="feature-no">05</span><div class="feature-icon">▦ …</div>
+            <h3>文章广场与评论</h3><p>浏览公开文章，参与文章讨论；也能直接向整个工作站反馈 Bug 或提出功能建议。</p>
+            <ul><li>文章与工作站两类评论</li><li>变体敏感词检查</li><li>重复内容与频率限制</li></ul><b class="card-link">逛逛文章广场 →</b>
           </a>
         </div>
 
@@ -208,6 +221,72 @@
         <div id="roadmapBoard" class="roadmap-board"></div>
       </section>
 
+      <section class="page" id="page-blogs" data-title="我的博客">
+        <div class="workspace-head blog-head">
+          <div><span class="eyebrow">MY WRITING DESK</span><h1>把解题过程，写成自己的知识库。</h1><p>使用 Markdown 写作，并用 <code>$...$</code> 或 <code>$$...$$</code> 插入 LaTeX 公式。</p></div>
+          <button class="btn primary" id="newBlogBtn">＋ 新建博客</button>
+        </div>
+        <div class="local-public-note"><span>i</span><p><b>当前是纯前端本地版：</b>私有文章只会出现在“我的博客”；公开文章会进入本浏览器的文章广场。跨设备、跨用户发布需要接入后端，具体见项目报告。</p></div>
+        <div class="blog-manager">
+          <aside class="blog-list-pane">
+            <div class="blog-list-tools">
+              <div class="search-box">⌕<input id="myBlogSearch" placeholder="搜索我的文章"></div>
+              <select id="myBlogVisibility" aria-label="按可见性筛选"><option value="">全部文章</option><option value="public">公开</option><option value="private">私有</option></select>
+            </div>
+            <div id="myBlogList" class="my-blog-list"></div>
+          </aside>
+          <section class="blog-editor-panel">
+            <div id="blogEditorEmpty" class="empty-state blog-empty"><div>✎</div><h3>选择文章或新建博客</h3><p>文章内容会自动保存在此浏览器中。</p></div>
+            <form id="blogEditor" class="blog-editor hidden">
+              <div class="blog-editor-top">
+                <div><span class="eyebrow" id="blogEditorMode">NEW ARTICLE</span><input id="blogTitle" class="blog-title-input" maxlength="100" placeholder="文章标题" required></div>
+                <button class="icon-btn danger" id="deleteBlogBtn" type="button" title="删除文章">×</button>
+              </div>
+              <div class="blog-meta-fields">
+                <label>署名<input id="blogAuthor" maxlength="30" placeholder="例如：Leather 用户"></label>
+                <label>可见性<select id="blogVisibility"><option value="private">私有 · 仅自己可见</option><option value="public">公开 · 显示在文章广场</option></select></label>
+                <label class="wide-field">标签<input id="blogTags" maxlength="100" placeholder="算法, 图论, 题解（用逗号分隔）"></label>
+                <label class="wide-field">摘要<textarea id="blogSummary" maxlength="240" placeholder="用一两句话介绍这篇文章"></textarea></label>
+              </div>
+              <div class="write-toolbar"><span>Markdown + LaTeX</span><small>支持标题、列表、引用、链接、代码块、表格与公式</small><button class="text-btn" id="toggleBlogPreviewBtn" type="button">打开预览</button></div>
+              <textarea id="blogContent" class="blog-content-editor" maxlength="60000" spellcheck="false" placeholder="# 标题&#10;&#10;在这里开始写作……&#10;&#10;行内公式：$O(n \log n)$&#10;&#10;独立公式：&#10;$$&#10;\sum_{i=1}^{n} i = \frac{n(n+1)}{2}&#10;$$"></textarea>
+              <div id="blogPreview" class="markdown-body blog-preview hidden"></div>
+              <p class="form-error" id="blogFormError" role="alert"></p>
+              <div class="blog-editor-actions"><span id="blogSaveHint">尚未保存</span><button class="btn ghost" id="viewBlogBtn" type="button">阅读模式</button><button class="btn primary" type="submit">保存文章</button></div>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section class="page" id="page-square" data-title="文章广场">
+        <div class="workspace-head square-head">
+          <div><span class="eyebrow">PUBLIC ARTICLE SQUARE</span><h1>分享思路，也欢迎严谨的讨论。</h1><p>这里仅展示设为公开的博客。评论前会进行严格的前端敏感内容检查。</p></div>
+          <a class="btn primary" href="#blogs">写一篇文章</a>
+        </div>
+        <div class="square-toolbar">
+          <div class="search-box">⌕<input id="squareSearch" placeholder="搜索标题、摘要、作者或标签"></div>
+          <select id="squareSort" aria-label="文章排序"><option value="updated">最近更新</option><option value="created">最近发布</option><option value="comments">评论最多</option></select>
+          <span id="squareCount">0 篇公开文章</span>
+        </div>
+        <div id="squareGrid" class="square-grid"></div>
+        <section class="station-comments">
+          <div class="station-comment-intro"><span class="eyebrow">STATION FEEDBACK</span><h2>给整个工作站留言</h2><p>发现 bug、功能异常或有改进建议，可以在这里反馈。请勿留下密码、密钥等隐私信息。</p></div>
+          <div class="station-comment-main">
+            <form id="stationCommentForm" class="comment-form">
+              <div class="comment-fields"><input id="stationCommentAuthor" maxlength="30" placeholder="你的称呼"><select id="stationCommentType"><option value="bug">Bug 反馈</option><option value="suggestion">功能建议</option><option value="other">其他留言</option></select></div>
+              <textarea id="stationCommentContent" maxlength="1000" placeholder="请尽量说明复现步骤、浏览器环境或具体建议……" required></textarea>
+              <div><small>提交前会检查变体、谐音拆分与特殊符号绕过。</small><button class="btn primary small" type="submit">提交留言</button></div>
+            </form>
+            <div id="stationCommentList" class="comment-list"></div>
+          </div>
+        </section>
+      </section>
+
+      <section class="page" id="page-article" data-title="阅读文章">
+        <button class="article-back text-btn" id="articleBackBtn">← 返回文章广场</button>
+        <div id="articleView"></div>
+      </section>
+
       <footer><span>Leather · Built for competitive programmers</span><span>所有数据默认仅存于此浏览器</span></footer>
     </main>
   </div>
@@ -221,6 +300,7 @@
   </div>
   <div class="toast-stack" id="toastStack" aria-live="polite"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" integrity="sha384-cMkvdD8LoxVzGF/RPUKAcvmm49FQ0oxwDF3BGKtDXcEc+T1b2N+teh/OJfpU0jr6" crossorigin="anonymous" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>
