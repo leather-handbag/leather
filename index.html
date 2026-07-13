@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Leather：面向信息学竞赛生的代码模板库、在线对拍与分层任务导图。">
+  <meta name="theme-color" content="#f5f1e8">
+  <title>Leather · 竞赛代码工作台</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#home" aria-label="Leather 首页">
+        <span class="brand-mark">L</span>
+        <span><b>Leather</b><small>竞赛代码工作台</small></span>
+      </a>
+      <nav class="main-nav" aria-label="主导航">
+        <a href="#home" data-page="home"><span class="nav-icon">⌂</span><span>首页</span></a>
+        <a href="#vault" data-page="vault"><span class="nav-icon">◇</span><span>模板库</span></a>
+        <a href="#stress" data-page="stress"><span class="nav-icon">⇄</span><span>代码对拍</span></a>
+        <a href="#roadmap" data-page="roadmap"><span class="nav-icon">⌁</span><span>任务导图</span></a>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="status-dot"></div>
+        <div><b>本地优先</b><small>数据留在你的浏览器中</small></div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="menuBtn" aria-label="展开菜单">☰</button>
+        <div class="breadcrumb"><span>Leather</span><i>/</i><b id="pageTitle">首页</b></div>
+        <div class="top-actions">
+          <span class="save-state" id="saveState"><i></i>本地存储</span>
+          <a class="icon-btn" href="https://github.com/" target="_blank" rel="noreferrer" aria-label="GitHub">↗</a>
+        </div>
+      </header>
+
+      <section class="page active" id="page-home" data-title="首页">
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">FOR OI / ICPC LEARNERS</span>
+            <h1>把散落的代码、验证<br>和计划，收回一个工作台。</h1>
+            <p>Leather 是一个无需登录、开箱即用的竞赛辅助站。模板加密保存在本地，对拍专注于发现边界错误，任务导图帮你看清真正优先的事。</p>
+            <div class="hero-actions">
+              <a class="btn primary" href="#vault">建立我的模板库 <span>→</span></a>
+              <a class="btn ghost" href="#stress">开始一次对拍</a>
+            </div>
+          </div>
+          <div class="hero-visual" aria-hidden="true">
+            <div class="code-window">
+              <div class="window-head"><span></span><span></span><span></span><b>dinic.cpp</b></div>
+              <pre><em>01</em> <i>#define</i> rep(i,a,n) ...
+<em>02</em> <i>const int</i> N=2e5+10;
+<em>03</em> <strong>int</strong> n,m,dis[N],cur[N];
+<em>04</em>
+<em>05</em> <strong>int</strong> bfs(){
+<em>06</em>   queue&lt;int&gt; q;
+<em>07</em>   <mark>dis[s]=1;</mark>
+<em>08</em>   <i>// level graph</i>
+<em>09</em> }</pre>
+            </div>
+            <div class="floating-card fc-one"><span>✓</span><div><b>版本已保存</b><small>新增 4 行，删除 1 行</small></div></div>
+            <div class="floating-card fc-two"><span>⇄</span><div><b>对拍通过</b><small>500 / 500 组</small></div></div>
+          </div>
+        </div>
+
+        <div class="section-heading">
+          <div><span class="eyebrow">ONE DESK, THREE TOOLS</span><h2>为训练中的真实痛点而做</h2></div>
+          <p>没有帐号体系，没有云端依赖。打开网页，就能继续上次的工作。</p>
+        </div>
+        <div class="feature-grid">
+          <a class="feature-card tone-green" href="#vault">
+            <span class="feature-no">01</span><div class="feature-icon">{ }</div>
+            <h3>加密模板库</h3><p>用关键字和密码开启独立空间。分区、标签页、标签与语言筛选，让板子真正好找。</p>
+            <ul><li>AES-GCM 本地加密</li><li>保存即生成版本快照</li><li>逐行查看代码差异</li></ul><b class="card-link">打开模板库 →</b>
+          </a>
+          <a class="feature-card tone-orange" href="#stress">
+            <span class="feature-no">02</span><div class="feature-icon">A ≟ B</div>
+            <h3>可靠代码对拍</h3><p>同一份随机数据交给正解和暴力，自动定位第一组不同结果，并展示完整现场。</p>
+            <ul><li>隔离运行，支持超时中止</li><li>随机数组、整数、图模板</li><li>可复现的随机种子</li></ul><b class="card-link">进入对拍页 →</b>
+          </a>
+          <a class="feature-card tone-blue" href="#roadmap">
+            <span class="feature-no">03</span><div class="feature-icon">◎</div>
+            <h3>分层任务导图</h3><p>把最重要的事放在最上层。每层容纳多个任务，拖动调整顺序，训练重点一眼可见。</p>
+            <ul><li>按层表达优先级</li><li>任务可跨层移动</li><li>自动统计完成进度</li></ul><b class="card-link">规划训练任务 →</b>
+          </a>
+        </div>
+
+        <div class="principles">
+          <div><span class="eyebrow">WHY LEATHER</span><h2>克制，但足够耐用。</h2></div>
+          <div class="principle-list">
+            <article><b>01</b><div><h3>数据归你</h3><p>模板经密码派生密钥加密后才写入 localStorage，源码不会发送到服务器。</p></div></article>
+            <article><b>02</b><div><h3>部署简单</h3><p>全部由 HTML、CSS 和 JavaScript 组成，GitHub Pages 可以免费托管，不需要维护后端。</p></div></article>
+            <article><b>03</b><div><h3>面向训练流程</h3><p>不追求成为又一个在线 IDE，只把模板沉淀、正确性验证和训练规划三件事做好。</p></div></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-vault" data-title="模板库">
+        <div id="vaultGate" class="gate-wrap">
+          <div class="gate-info">
+            <span class="eyebrow">ENCRYPTED CODE VAULT</span>
+            <h1>你的算法模板，<br>只用一把钥匙打开。</h1>
+            <p>关键字用于定位独立代码库，密码只在本次打开期间保留于内存。Leather 不会保存明文密码，也无法替你找回密码。</p>
+            <div class="security-note"><span>⌾</span><div><b>浏览器原生加密</b><small>PBKDF2 派生密钥 · AES-256-GCM 验证与加密</small></div></div>
+          </div>
+          <form class="gate-card" id="vaultForm">
+            <div class="gate-tabs" role="tablist">
+              <button type="button" class="active" data-mode="open">打开代码库</button>
+              <button type="button" data-mode="create">创建新库</button>
+            </div>
+            <label>关键字<input id="vaultKeyword" autocomplete="username" maxlength="50" placeholder="例如：my-algorithm-book" required></label>
+            <label>密码<div class="password-box"><input id="vaultPassword" type="password" autocomplete="current-password" minlength="6" placeholder="至少 6 位" required><button type="button" id="togglePassword" aria-label="显示密码">◉</button></div></label>
+            <label class="confirm-field hidden" id="confirmField">确认密码<input id="vaultConfirm" type="password" autocomplete="new-password" minlength="6" placeholder="再次输入密码"></label>
+            <p class="form-error" id="vaultError" role="alert"></p>
+            <button class="btn primary wide" id="vaultSubmit" type="submit">解锁代码库 <span>→</span></button>
+            <small class="gate-tip">提示：相同关键字与密码只会打开同一个本地代码库。</small>
+          </form>
+        </div>
+
+        <div id="vaultWorkspace" class="vault-workspace hidden">
+          <div class="workspace-head">
+            <div><span class="eyebrow">MY CODE VAULT</span><h1 id="vaultName">代码模板库</h1><p id="vaultStats">0 个分区 · 0 个模板</p></div>
+            <div class="head-buttons">
+              <button class="btn ghost" id="importVaultBtn">导入备份</button>
+              <button class="btn ghost" id="exportVaultBtn">导出密文</button>
+              <button class="btn dark" id="lockVaultBtn">锁定</button>
+              <input type="file" id="vaultFileInput" accept="application/json,.json" hidden>
+            </div>
+          </div>
+          <div class="vault-layout">
+            <aside class="section-panel">
+              <div class="panel-title"><b>分区</b><button class="mini-btn" id="addSectionBtn" title="添加分区">＋</button></div>
+              <div id="sectionList" class="section-list"></div>
+            </aside>
+            <section class="page-panel">
+              <div class="page-panel-head">
+                <div><span class="color-dot" id="activeSectionDot"></span><b id="activeSectionName">分区</b></div>
+                <button class="btn small primary" id="addPageBtn">＋ 新建模板</button>
+              </div>
+              <div class="template-toolbar">
+                <div class="search-box">⌕<input id="templateSearch" placeholder="搜索标题或标签"></div>
+                <select id="languageFilter" aria-label="按语言筛选"><option value="">全部语言</option><option>C++</option><option>Python</option><option>Java</option><option>JavaScript</option><option>Other</option></select>
+              </div>
+              <div id="pageList" class="page-list"></div>
+            </section>
+            <section class="editor-panel" id="editorPanel">
+              <div id="emptyEditor" class="empty-state"><div>{ }</div><h3>选择一个模板开始编辑</h3><p>或在当前分区新建一个模板。</p></div>
+              <div id="editorBody" class="editor-body hidden">
+                <div class="editor-meta">
+                  <input id="pageNameInput" class="title-input" maxlength="80" placeholder="模板名称">
+                  <div class="meta-actions"><button class="icon-btn danger" id="deletePageBtn" title="删除模板">×</button><button class="btn primary small" id="savePageBtn">保存版本</button></div>
+                </div>
+                <div class="field-row"><select id="pageLanguage"><option>C++</option><option>Python</option><option>Java</option><option>JavaScript</option><option>Other</option></select><input id="pageTags" placeholder="标签，用逗号分隔"></div>
+                <div class="code-editor-wrap"><div class="line-numbers" id="lineNumbers">1</div><textarea id="codeEditor" spellcheck="false" placeholder="在这里粘贴或编写代码……"></textarea></div>
+                <div class="version-area">
+                  <div class="version-head"><div><b>版本记录</b><span id="versionCount">0 个快照</span></div><button class="text-btn" id="toggleDiffBtn">展开差异</button></div>
+                  <div id="versionList" class="version-list"></div>
+                  <div id="diffPanel" class="diff-panel hidden"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-stress" data-title="代码对拍">
+        <div class="workspace-head stress-head">
+          <div><span class="eyebrow">STRESS TEST</span><h1>让随机数据替你找错。</h1><p>相同输入分别运行正解和暴力；输出一旦不同，立即保留可复现现场。</p></div>
+          <div class="run-controls">
+            <label>运行语言<select id="stressLanguage"><option value="js">JavaScript（在线）</option><option value="cpp">C++14（本地脚本）</option></select></label>
+            <label>数据组数<input id="caseCount" type="number" min="1" max="5000" value="100"></label>
+            <label>随机种子<input id="seedInput" type="number" value="2026"></label>
+            <button class="btn primary" id="runStressBtn">▶ 开始对拍</button>
+            <button class="btn danger-outline hidden" id="stopStressBtn">停止</button>
+          </div>
+        </div>
+        <div class="runtime-note" id="runtimeNote"><span>i</span><p><b>在线模式约定：</b>正解和暴力分别定义 <code>solve(input)</code> 并返回字符串；生成器定义 <code>generate(seed)</code>。代码在独立 Worker 中运行，无法访问页面与本地模板。</p></div>
+        <div class="stress-grid">
+          <article class="code-card">
+            <header><div><span class="code-badge green">01</span><div><b>待测正解</b><small>solution</small></div></div><button class="text-btn reset-code" data-target="solutionCode">恢复示例</button></header>
+            <textarea id="solutionCode" spellcheck="false"></textarea>
+          </article>
+          <article class="code-card">
+            <header><div><span class="code-badge orange">02</span><div><b>暴力解法</b><small>brute force</small></div></div><button class="text-btn reset-code" data-target="bruteCode">恢复示例</button></header>
+            <textarea id="bruteCode" spellcheck="false"></textarea>
+          </article>
+          <article class="code-card generator-card">
+            <header><div><span class="code-badge blue">03</span><div><b>数据生成器</b><small>generator</small></div></div><div class="template-menu"><button class="text-btn" id="generatorMenuBtn">插入模板⌄</button><div class="dropdown hidden" id="generatorDropdown"><button data-template="array">随机数组</button><button data-template="number">随机整数</button><button data-template="graph">随机连通图</button></div></div></header>
+            <textarea id="generatorCode" spellcheck="false"></textarea>
+          </article>
+        </div>
+        <section class="result-console" id="stressResult">
+          <div class="console-head"><div><i class="idle"></i><b id="resultTitle">等待开始</b><span id="resultSummary">准备好三段代码后开始对拍</span></div><button class="text-btn" id="copyResultBtn">复制结果</button></div>
+          <div class="progress-track"><span id="stressProgress"></span></div>
+          <div class="console-body" id="resultBody"><div class="console-empty">运行结果会显示在这里。</div></div>
+        </section>
+      </section>
+
+      <section class="page" id="page-roadmap" data-title="任务导图">
+        <div class="workspace-head roadmap-head">
+          <div><span class="eyebrow">TRAINING ROADMAP</span><h1>先做重要的，再做更多的。</h1><p>越靠上的层级优先级越高。拖动任务卡可以在同层排序，也可以移动到其他层。</p></div>
+          <div class="roadmap-actions"><div class="progress-ring" id="progressRing"><b>0%</b></div><button class="btn ghost" id="resetRoadmapBtn">载入示例</button><button class="btn primary" id="addLevelBtn">＋ 添加层级</button></div>
+        </div>
+        <div class="roadmap-legend"><span><i class="priority high"></i>上层优先</span><span><i class="priority low"></i>下层蓄力</span><span>拖动卡片调整层级与顺序</span></div>
+        <div id="roadmapBoard" class="roadmap-board"></div>
+      </section>
+
+      <footer><span>Leather · Built for competitive programmers</span><span>所有数据默认仅存于此浏览器</span></footer>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="modalBackdrop" role="presentation">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head"><h3 id="modalTitle">标题</h3><button class="icon-btn" id="modalClose">×</button></div>
+      <div id="modalBody"></div>
+      <div class="modal-actions"><button class="btn ghost" id="modalCancel">取消</button><button class="btn primary" id="modalConfirm">确定</button></div>
+    </div>
+  </div>
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
