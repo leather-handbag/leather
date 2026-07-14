@@ -8,7 +8,8 @@ const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
 const projectRef = process.env.SUPABASE_PROJECT_REF;
 assert(url && key && serviceKey && accessToken && projectRef, "Remote test environment is incomplete");
 
-const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
+const timedFetch = (input, init = {}) => fetch(input, { ...init, signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(25000)]) : AbortSignal.timeout(25000) });
+const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }, global: { fetch: timedFetch } };
 const service = createClient(url, serviceKey, options);
 const visitor = createClient(url, key, options);
 const stamp = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
@@ -17,6 +18,7 @@ const avatarPaths = [];
 const checks = [];
 
 function ok(name) { checks.push(name); }
+function stage(name) { console.log(JSON.stringify({ stage: name })); }
 function noError(result, label) { assert.ifError(result.error, label); return result.data; }
 async function expectError(request, label) { const result = await request; assert(result.error, `${label}: expected an error`); ok(label); }
 
@@ -24,14 +26,14 @@ async function databaseQuery(query) {
   const response = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=utf-8" },
-    body: JSON.stringify({ query })
+    body: JSON.stringify({ query }), signal: AbortSignal.timeout(25000)
   });
   if (!response.ok) throw new Error(`Management database query failed: ${response.status} ${await response.text()}`);
   return response.json();
 }
 
 async function createUser(kind) {
-  const email = `codex-${stamp}-${kind}@example.com`;
+  const email = `codex-${crypto.randomUUID()}-${kind}@example.com`;
   const password = `T!${crypto.randomUUID()}a8`;
   const created = await service.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: `Codex ${kind}` } });
   const user = noError(created, `create ${kind}`).user;
@@ -53,12 +55,14 @@ try {
   const admin = await createUser("admin");
   const one = await createUser("user-one");
   const two = await createUser("user-two");
+  stage("temporary-users-created");
   await setRole(owner.id, "owner");
   await setRole(admin.id, "admin");
+  stage("temporary-roles-ready");
 
   const self = noError(await one.client.rpc("get_my_profile").single(), "get own profile");
   assert.equal(self.role, "user");
-  const oneHandle = `test_${stamp.replaceAll("-", "").slice(-18)}`;
+  const oneHandle = `test_${crypto.randomUUID().replaceAll("-", "").replace(/\d/g, "a").slice(0, 18)}`;
   noError(await one.client.rpc("update_my_profile", { p_display_name: "远端测试用户", p_handle: oneHandle, p_bio: "自动清理的权限回归账号" }), "update own profile");
   await expectError(one.client.from("profiles").select("*"), "sensitive profile table is not directly readable");
 
@@ -70,6 +74,7 @@ try {
   assert.deepEqual(otherPosts.map(v => v.id), [publicPost.id]);
   const staffPosts = noError(await admin.client.from("posts").select("id").in("id", [privatePost.id, publicPost.id]), "admin reads posts");
   assert.equal(staffPosts.length, 2); ok("public/private post RLS");
+  stage("post-rls-passed");
 
   noError(await two.client.from("post_comments").insert({ post_id: publicPost.id, user_id: two.id, content: "公开文章评论回归" }), "comment on public post");
   await expectError(two.client.from("post_comments").insert({ post_id: privatePost.id, user_id: two.id, content: "不应写入的私有评论" }), "private post rejects comments");
@@ -83,6 +88,7 @@ try {
   noError(await two.client.from("station_comments").delete().eq("id", replyDiscussion.id), "author deletes discussion");
   const removedDiscussion = noError(await visitor.from("station_comments").select("id").eq("id", replyDiscussion.id), "verify discussion deletion");
   assert.equal(removedDiscussion.length, 0); ok("discussion reply, mention and author deletion");
+  stage("discussion-notifications-passed");
 
   const initialAutosave = noError(await one.client.rpc("get_blog_autosave_minutes"), "read blog autosave setting");
   assert([5, 10, 30].includes(Number(initialAutosave)));
@@ -96,6 +102,7 @@ try {
 
   const moderationCount = await databaseQuery("select count(*)::integer as count, count(distinct category)::integer as categories from private.sensitive_terms;");
   assert(moderationCount[0].count >= 400 && moderationCount[0].categories >= 8); ok("expanded strict moderation dictionary");
+  stage("checkin-and-moderation-passed");
 
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nWQAAAAASUVORK5CYII=", "base64");
   const avatarPath = `${one.id}/${crypto.randomUUID()}.png`; avatarPaths.push(avatarPath);
@@ -139,10 +146,12 @@ try {
 
   console.log(JSON.stringify({ passed: true, checks, temporaryUsers: users.length }));
 } finally {
+  stage("cleanup-started");
   if (avatarPaths.length) await service.storage.from("avatars").remove(avatarPaths);
   if (users.length) {
     const ids = users.filter(v => /^[0-9a-f-]{36}$/i.test(v)).map(v => `'${v}'::uuid`).join(",");
     if (ids) await databaseQuery(`delete from private.moderation_events where user_id in (${ids}) or actor_id in (${ids});`).catch(() => {});
   }
   for (const id of users.reverse()) await service.auth.admin.deleteUser(id).catch(() => {});
+  stage("cleanup-finished");
 }
