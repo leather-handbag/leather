@@ -16,17 +16,14 @@
 - 已配置并启用 GitHub OAuth Provider；授权端点实测返回 302 并正确跳转到 GitHub。
 - 已配置正式 SMTP，邮箱确认保持开启。
 - 已接入 Cloudflare Turnstile 前端组件，公开 Site Key 通过 Vite 构建变量注入；邮箱登录、注册与密码重置都会提交一次性 CAPTCHA Token，并处理过期、超时、失败和使用后重置。
+- 已按 Supabase 2025+ 界面的 Authentication → Configuration → Attack Protection 配置 Turnstile。远端 `security_captcha_enabled=true`、Provider 为 `turnstile` 且 Secret 已保存；无 Token 登录实测返回 `captcha_failed`，服务端强制校验生效。
 - GitHub Pages 已部署到 `https://leather-handbag.github.io/LeatherSS/`，最新 Actions 部署状态为成功。
 - 已完成四角色远端回归：访客、普通用户、管理员、站长。13 组权限与业务检查全部通过，临时账号、头像和无主审计记录已清理为 0。
 - 已完成桌面和窄屏界面截图验收，加入响应式修复、状态色、进入动效、代码窗指针反馈及 `prefers-reduced-motion` 降级。
 
-## 仍需处理的外部安全项
+## 仍存在的套餐限制
 
-### 1. Supabase CAPTCHA 尚未启用
-
-前端 Site Key 与验证流程已经完成，但远端 Auth 配置仍显示 `captcha_enabled=false`，没有 CAPTCHA Provider 或 Secret。请在 Supabase Authentication → Bot and Abuse Protection 选择 Cloudflare Turnstile、填入 Secret Key 并启用 CAPTCHA。Secret 绝不能发送到聊天、写入仓库或放进任何 `VITE_` 环境变量；公开 Site Key 已经配置，无需再次提供。
-
-### 2. 泄漏密码检查的套餐限制
+### 泄漏密码检查
 
 已尝试启用 HaveIBeenPwned 泄漏密码检查，Supabase 返回 HTTP 402：该功能仅 Pro 及以上套餐可用。当前仍有最短 8 位密码和 Auth 限流，但免费套餐无法启用此检查。
 
@@ -48,5 +45,5 @@
 2. 管理员按要求能读取私有博客、模板和计划，应只授权高度可信人员。
 3. 待审核头像位于公开 Storage bucket，随机路径很难猜测，但知道完整 URL 的人仍可直接访问；真正的图片内容识别仍需第三方审核或人工审核。
 4. 应用层封禁会阻止所有写入，但不会删除 Supabase Auth 会话；Auth 层彻底禁用需要服务端 Edge Function，`service_role` 绝不能进入前端。
-5. Turnstile 只有在 Supabase 保存 Secret 并启用后才会由服务端强制校验；WAF/CDN、备份和告警仍是上线安全的一部分。
+5. Turnstile 已由 Supabase 服务端强制校验，但 WAF/CDN、备份和告警仍是上线安全的一部分。
 6. 旧版 `localStorage` 数据不会自动上传，避免把旧草稿误公开或触发自动封禁；迁移前应先备份并人工检查。
