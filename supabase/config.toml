@@ -1,0 +1,13 @@
+project_id = "leather"
+
+[functions.training-bind]
+verify_jwt = false
+
+[functions.training-sync-request]
+verify_jwt = false
+
+[functions.training-sync-worker]
+verify_jwt = true
+
+[functions.training-catalog-sync]
+verify_jwt = false

@@ -140,6 +140,21 @@ export async function fetchUserAchievements(targetId) { const { data, error } = 
 export async function fetchLuckLeaderboard(period = "week") { const { data, error } = await supabase.rpc("get_luck_leaderboard", { period_name: period }); fail(error); return data || []; }
 export async function fetchCommentPostId(commentId) { const { data, error } = await supabase.from("post_comments").select("post_id").eq("id", commentId).maybeSingle(); fail(error); return data?.post_id || ""; }
 
+// Algorithm Expedition. All third-party fetches happen in Edge Functions; the browser only reads privacy-safe RPCs.
+export async function fetchTrainingDashboard() { const { data, error } = await supabase.rpc("get_my_training_dashboard"); fail(error); return data || {}; }
+export async function fetchTrainingProfile(targetId) { const { data, error } = await supabase.rpc("get_training_profile", { target_user: targetId }); fail(error); return data || null; }
+export async function fetchTrainingMap(targetId) { const { data, error } = await supabase.rpc("get_training_map", { target_user: targetId }); fail(error); return data || {}; }
+export async function fetchTrainingHeatmap(targetId, fromDate, toDate, platform = null) { const { data, error } = await supabase.rpc("get_training_heatmap", { target_user: targetId, from_date: fromDate, to_date: toDate, platform_name: platform || null }); fail(error); return data || []; }
+export async function fetchTrainingRecommendations(limit = 3) { const { data, error } = await supabase.rpc("get_training_recommendations", { limit_count: limit }); fail(error); return data || []; }
+export async function skipTrainingRecommendation(id) { const { error } = await supabase.rpc("skip_training_recommendation", { recommendation_id: id }); fail(error); }
+export async function fetchTrainingSyncStatus() { const { data, error } = await supabase.rpc("get_training_sync_status"); fail(error); return data || {}; }
+export async function fetchExplorerLeaderboard(limit = 12) { const { data, error } = await supabase.rpc("get_explorer_leaderboard", { limit_count: limit }); fail(error); return data || []; }
+export async function fetchTrainingAccessAudit(targetId, limit = 30) { const { data, error } = await supabase.rpc("get_training_access_audit", { target_user: targetId, limit_count: limit }); fail(error); return data || []; }
+export async function fetchTrainingAdminMetrics() { const { data, error } = await supabase.rpc("get_training_admin_metrics"); fail(error); return data || {}; }
+export async function updateTrainingPrivacy(value) { const { data, error } = await supabase.rpc("update_training_privacy", { accounts_visible: !!value.accounts, heatmap_visible: !!value.heatmap, map_visible: !!value.map, recent_visible: !!value.recent }); fail(error); return Array.isArray(data) ? data[0] : data; }
+export async function trainingBindingAction(body) { const { data, error } = await supabase.functions.invoke("training-bind", { body }); fail(error); if (data?.error) throw new Error(data.error); return data; }
+export async function requestTrainingSync(platform = null) { const { data, error } = await supabase.functions.invoke("training-sync-request", { body: { platform } }); fail(error); if (data?.error) throw new Error(data.error); return data; }
+
 export async function fetchVault() {
   const [{ data: sections, error: se }, { data: templates, error: te }, { data: snapshots, error: ve }] = await Promise.all([
     supabase.from("template_sections").select("*").eq("user_id", cloud.user.id).order("position"),

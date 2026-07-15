@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node tests/static-check.mjs && vite build",
+    "test": "node tests/static-check.mjs && node tests/training-check.mjs && vite build",
     "test:remote": "node tests/remote-check.mjs"
   },
   "dependencies": {

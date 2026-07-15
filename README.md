@@ -113,6 +113,12 @@ where id = 'YOUR_AUTH_UUID';
 
 完整的远端配置步骤、未完成项和风险见 [SUPABASE_SETUP_REPORT.md](SUPABASE_SETUP_REPORT.md)。
 
+## 算法远征
+
+项目现已包含独立的“算法远征”模块：用户可以验证绑定 Codeforces、AtCoder 与洛谷账号，服务端增量同步公开提交，并生成热力图、算法强弱项、七级能力地图、每日推荐和公开探险档案。训练画像默认公开，可在独立设置页分别关闭平台账号、热力图、能力地图和近期记录；私密热力图的管理员访问会记录审计。
+
+数据库迁移、Edge Functions、定时同步、隐私边界与运维方式见 [ALGORITHM_EXPEDITION_REPORT.md](ALGORITHM_EXPEDITION_REPORT.md)。现有任务导图继续作为手动训练计划使用，不与算法远征数据混合。
+
 ## 对拍约定
 
 JavaScript 模式中，正解和暴力定义 `solve(input)`，生成器定义 `generate(seed)`；生成器可以调用 `rnd(l, r)`。代码在 Web Worker 中运行，单次任务最长 20 秒。

@@ -1,4 +1,5 @@
 import * as api from "./cloud.js";
+import { createTrainingWorld } from "./training-world.js";
 
 "use strict";
 
@@ -38,9 +39,11 @@ $("#modalCancel").onclick = () => closeModal(false);
 $("#modalConfirm").onclick = () => closeModal(true);
 $("#modalBackdrop").addEventListener("click", e => { if (e.target === e.currentTarget) closeModal(false); });
 
+const trainingWorld = createTrainingWorld({ api, $, $$, esc, toast, nowText, openModal, avatarHtml });
+
 // Navigation
-const titles = { home: "首页", vault: "模板库", stress: "代码对拍", roadmap: "任务导图", blogs: "我的博客", "blog-editor": "博客编辑器", favorites: "我的收藏", square: "文章广场", discussion: "讨论区", article: "阅读文章", account: "个人中心", checkin: "每日签到", leaderboard: "排行榜", profile: "个人主页", admin: "管理后台" };
-const protectedPages = new Set(["vault", "stress", "roadmap", "blogs", "blog-editor", "favorites", "checkin", "admin"]);
+const titles = { home: "首页", vault: "模板库", stress: "代码对拍", roadmap: "任务导图", "training-world": "算法远征", blogs: "我的博客", "blog-editor": "博客编辑器", favorites: "我的收藏", square: "文章广场", discussion: "讨论区", article: "阅读文章", account: "我的主页", settings: "设置", checkin: "每日签到", leaderboard: "排行榜", profile: "个人主页", admin: "管理后台" };
+const protectedPages = new Set(["vault", "stress", "roadmap", "blogs", "blog-editor", "favorites", "checkin", "settings", "admin"]);
 function route() {
   const path = location.hash.slice(1) || "home";
   const [name, id = ""] = path.split("/");
@@ -50,7 +53,7 @@ function route() {
   }
   if (page === "admin" && !["admin", "owner"].includes(api.cloud.profile?.role)) page = "account";
   $$(".page").forEach(el => el.classList.toggle("active", el.id === `page-${page}`));
-  $$(".main-nav a").forEach(el => el.classList.toggle("active", el.dataset.page === page || (page === "blog-editor" && el.dataset.page === "blogs") || (page === "article" && el.dataset.page === "square") || (page === "profile" && el.dataset.page === "leaderboard")));
+  $$(".main-nav a").forEach(el => el.classList.toggle("active", el.dataset.page === page || (page === "blog-editor" && el.dataset.page === "blogs") || (page === "article" && el.dataset.page === "square") || (page === "profile" && el.dataset.page === "leaderboard") || (page === "settings" && el.dataset.page === "account")));
   $("#pageTitle").textContent = titles[page];
   $("#sidebar").classList.remove("open");
   if ($("#sidebar").contains(document.activeElement)) document.activeElement.blur();
@@ -61,6 +64,8 @@ function route() {
   if (page === "discussion") renderStationComments();
   if (page === "article") renderArticle(decodeURIComponent(id));
   if (page === "account") renderAccount();
+  if (page === "settings") { renderAccount(); trainingWorld.renderSettings(); }
+  if (page === "training-world") trainingWorld.renderWorld(decodeURIComponent(id));
   if (page === "checkin") renderCheckinPage();
   if (page === "leaderboard") renderLeaderboard();
   if (page === "profile") renderPublicProfile(decodeURIComponent(id));
@@ -1185,6 +1190,7 @@ function renderAccount() {
   $("#accountLevelSummary").innerHTML = profile.banned_at ? `<div class="ban-notice"><b>账号已封禁</b><p>${esc(profile.ban_reason || "内容违规")}</p></div>` : `<div class="score-orb name-${stats?.name_color || "blue"}">${Number(stats?.score || 0)}</div><div><b class="name-${stats?.name_color || "blue"}">${esc(profile.display_name)}</b>${roleBadge(profile.role)}<p>累计签到 ${Number(stats?.checkin_count || 0)} 次</p></div>`;
   $("#myPublicProfileBtn").href = `#profile/${encodeURIComponent(profile.id)}`;
   $("#blogAutosaveEnabled").checked = blogStore.autosaveEnabled;
+  trainingWorld.refreshAccountSummary();
 }
 
 $$('[data-auth-tab]').forEach(button => button.onclick = () => {
@@ -1266,8 +1272,8 @@ async function renderPublicProfile(id) {
     const profile = await api.fetchPublicProfile(target); if (!profile) throw new Error("没有找到这个用户");
     const [achievements, following] = await Promise.all([api.fetchUserAchievements(profile.id), api.isFollowingUser(profile.id)]);
     const articles = blogStore.blogs.filter(v => v.userId === profile.id && v.visibility === "public").sort((a,b) => b.updated-a.updated);
-    const followButton = api.cloud.user && api.cloud.user.id!==profile.id ? `<button class="btn ${following?"ghost":"primary"} small" id="profileFollowBtn" type="button">${following?"已关注 · 取消":"＋ 关注"}</button>` : "";
-    $("#publicProfileView").innerHTML = `<section class="public-profile-card">${avatarHtml(profile,"xlarge")}<div><span class="eyebrow">PUBLIC PROFILE</span><div class="profile-name-row"><h1 class="name-${profile.role === "user" ? profile.name_color : "purple"}">${esc(profile.display_name)}</h1>${followButton}</div><p class="profile-handle">@${esc(profile.handle)} ${roleBadge(profile.role)}</p><p>${esc(profile.bio || "这个用户还没有填写个人简介。")}</p><div class="profile-stats"><span><b>${Number(profile.score)}</b>等级分</span><span><b>${Number(profile.checkin_count)}</b>签到次数</span><span><b>${articles.length}</b>公开文章</span><span><b>${Number(profile.follower_count||0)}</b>粉丝</span><span><b>${Number(profile.following_count||0)}</b>关注</span></div></div></section><section class="achievement-section"><div class="comment-title"><div><span class="eyebrow">ACHIEVEMENTS</span><h2>成就徽章</h2></div><span>${achievements.length} 枚</span></div><div class="achievement-grid">${achievements.length?achievements.map(item=>`<article><i>${esc(item.icon)}</i><div><b>${esc(item.name)}</b><p>${esc(item.description)}</p><span>${esc(item.detail||"")} · ${nowText(Date.parse(item.achieved_at))}</span></div></article>`).join(""):'<div class="empty-list">继续签到、写作和讨论即可解锁徽章。</div>'}</div></section><section class="profile-articles"><div class="comment-title"><div><span class="eyebrow">PUBLIC POSTS</span><h2>公开文章</h2></div></div><div class="square-grid">${articles.length ? articles.map(blog => `<article class="square-card profile-post" data-id="${blog.id}"><h2>${esc(blog.title)}</h2><p>${esc(articleExcerpt(blog))}</p><footer><span>${nowText(blog.updated)}</span><span>♥ ${Number(blog.likeCount||0)}　${blog.comments.length} 条评论　阅读 →</span></footer></article>`).join("") : '<div class="empty-list">暂无公开文章。</div>'}</div></section>`;
+    const followButton = api.cloud.user && api.cloud.user.id!==profile.id ? `<button class="btn ${following?"ghost":"primary"} small" id="profileFollowBtn" type="button">${following?"已关注 · 取消":"＋ 关注"}</button>` : api.cloud.user?.id===profile.id ? '<a class="btn ghost small" href="#settings">设置</a>' : "";
+    $("#publicProfileView").innerHTML = `<section class="public-profile-card">${avatarHtml(profile,"xlarge")}<div><span class="eyebrow">PUBLIC PROFILE</span><div class="profile-name-row"><h1 class="name-${profile.role === "user" ? profile.name_color : "purple"}">${esc(profile.display_name)}</h1>${followButton}</div><p class="profile-handle">@${esc(profile.handle)} ${roleBadge(profile.role)}</p><p>${esc(profile.bio || "这个用户还没有填写个人简介。")}</p><div class="profile-stats"><span><b>${Number(profile.score)}</b>等级分</span><span><b>${Number(profile.checkin_count)}</b>签到次数</span><span><b>${articles.length}</b>公开文章</span><span><b>${Number(profile.follower_count||0)}</b>粉丝</span><span><b>${Number(profile.following_count||0)}</b>关注</span></div><div class="profile-training-link"><a class="btn primary small" href="#training-world/${encodeURIComponent(profile.id)}">查看算法远征地图</a></div></div></section><section class="achievement-section"><div class="comment-title"><div><span class="eyebrow">ACHIEVEMENTS</span><h2>成就徽章</h2></div><span>${achievements.length} 枚</span></div><div class="achievement-grid">${achievements.length?achievements.map(item=>`<article><i>${esc(item.icon)}</i><div><b>${esc(item.name)}</b><p>${esc(item.description)}</p><span>${esc(item.detail||"")} · ${nowText(Date.parse(item.achieved_at))}</span></div></article>`).join(""):'<div class="empty-list">继续签到、写作、讨论和算法远征即可解锁徽章。</div>'}</div></section><section class="profile-articles"><div class="comment-title"><div><span class="eyebrow">PUBLIC POSTS</span><h2>公开文章</h2></div></div><div class="square-grid">${articles.length ? articles.map(blog => `<article class="square-card profile-post" data-id="${blog.id}"><h2>${esc(blog.title)}</h2><p>${esc(articleExcerpt(blog))}</p><footer><span>${nowText(blog.updated)}</span><span>♥ ${Number(blog.likeCount||0)}　${blog.comments.length} 条评论　阅读 →</span></footer></article>`).join("") : '<div class="empty-list">暂无公开文章。</div>'}</div></section>`;
     $("#profileFollowBtn")?.addEventListener("click",async()=>{try{if(following)await api.unfollowUser(profile.id);else await api.followUser(profile.id);await renderPublicProfile(profile.id);toast(following?"已取消关注":"关注成功");}catch(error){toast(error.message,"error");}});
     $$(".profile-post", $("#publicProfileView")).forEach(card => card.onclick = () => location.hash = `article/${encodeURIComponent(card.dataset.id)}`);
   } catch (error) { $("#publicProfileView").innerHTML = `<div class="square-empty"><div>?</div><h3>${esc(error.message)}</h3><a class="btn primary small" href="#leaderboard">返回排行榜</a></div>`; }
@@ -1333,10 +1339,17 @@ async function renderModerationEvents() {
   try { const data = await api.fetchModerationEvents(); $("#moderationEventList").innerHTML = data.length ? data.map(item => `<article class="audit-row"><span>${nowText(Date.parse(item.created_at))}</span><b>${esc(item.source_table)}</b><p>${esc(item.reason)}</p><code>${esc(item.user_id || "未知用户")}</code></article>`).join("") : '<div class="empty-list">暂无审核记录</div>'; }
   catch (error) { $("#moderationEventList").innerHTML = `<div class="empty-list">${esc(error.message)}</div>`; }
 }
+async function renderTrainingAdminMetrics() {
+  try {
+    const data = await api.fetchTrainingAdminMetrics(), queue = data.queue || {};
+    $("#trainingAdminUpdated").textContent = data.generated_at ? nowText(Date.parse(data.generated_at)) : "刚刚";
+    $("#trainingAdminMetrics").innerHTML = `<div class="admin-training-summary"><span><b>${Number(queue.queued || 0)}</b>排队</span><span><b>${Number(queue.running || 0)}</b>运行中</span><span><b>${Number(queue.failed_24h || 0)}</b>24 小时失败</span></div><div class="admin-training-columns"><section><h3>平台状态</h3>${(data.sources || []).map(row => `<p><b>${esc(row.platform)}</b><span>${esc(row.status)} · ${Number(row.accounts)} 个账号</span><small>${row.last_success_at ? nowText(Date.parse(row.last_success_at)) : "尚未成功同步"}</small></p>`).join("") || '<div class="empty-list">暂无绑定账号</div>'}</section><section><h3>近期错误</h3>${(data.errors || []).map(row => `<p><b>${esc(row.platform || "unknown")}</b><span>${esc(row.error_code || "sync_error")} · ${Number(row.occurrences)} 次</span><small>${row.latest ? nowText(Date.parse(row.latest)) : ""}</small></p>`).join("") || '<div class="empty-list">最近 24 小时没有同步错误</div>'}</section><section><h3>私密访问审计</h3>${(data.recent_private_access || []).map(row => `<p><b>@${esc(row.actor_handle)}</b><span>查看 ${esc(row.target_user_id)}</span><small>${nowText(Date.parse(row.created_at))}</small></p>`).join("") || '<div class="empty-list">暂无私密热力图访问</div>'}</section></div>`;
+  } catch (error) { $("#trainingAdminMetrics").innerHTML = `<div class="empty-list">${esc(error.message)}</div>`; }
+}
 async function renderAdmin() {
   const allowed = isStaff(); $("#adminDenied").classList.toggle("hidden", allowed); $("#adminConsole").classList.toggle("hidden", !allowed); if (!allowed) return;
   $("#adminRoleBadge").textContent = api.cloud.profile.role === "owner" ? "站长 · 最高权限" : "管理员";
-  await renderAdminUsers(); await Promise.all([renderAvatarRequests(), renderOwnerBans(), renderAdminContent(), renderModerationEvents()]);
+  await renderAdminUsers(); await Promise.all([renderAvatarRequests(), renderOwnerBans(), renderAdminContent(), renderModerationEvents(), renderTrainingAdminMetrics()]);
 }
 $("#adminUserSearch").oninput = () => { clearTimeout(leaderboardTimer); leaderboardTimer = setTimeout(renderAdminUsers, 260); };
 $("#adminContentType").onchange = renderAdminContent; $("#refreshAdminBtn").onclick = renderAdmin;
@@ -1351,7 +1364,7 @@ async function onCloudAuthChange(event) {
   await refreshNotifications();
   if (hasWriteAccess()) await Promise.all([loadCloudVault(), loadCloudPlan()]);
   else { vault.data = null; $("#vaultWorkspace").classList.add("hidden"); $("#vaultGate").classList.remove("hidden"); roadmap.levels = []; renderRoadmap(); }
-  if (event === "PASSWORD_RECOVERY") { location.hash = "account"; toast("请在个人中心设置新密码"); }
+  if (event === "PASSWORD_RECOVERY") { location.hash = "settings"; toast("请在设置页设置新密码"); }
   route();
 }
 

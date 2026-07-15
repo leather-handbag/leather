@@ -66,6 +66,22 @@ try {
   noError(await one.client.rpc("update_my_profile", { p_display_name: "远端测试用户", p_handle: oneHandle, p_bio: "自动清理的权限回归账号" }), "update own profile");
   await expectError(one.client.from("profiles").select("*"), "sensitive profile table is not directly readable");
 
+  const trainingDashboard = noError(await one.client.rpc("get_my_training_dashboard"), "read own training dashboard");
+  assert.equal(trainingDashboard.maps.length, 7); assert(trainingDashboard.maps[0].unlocked); assert.equal(trainingDashboard.accounts.length, 0);
+  const publicTraining = noError(await visitor.rpc("get_training_profile", { target_user: one.id }), "read public training profile");
+  assert.equal(publicTraining.visibility.map, true); assert.equal(publicTraining.maps.length, 7);
+  noError(await one.client.rpc("update_training_privacy", { accounts_visible: false, heatmap_visible: false, map_visible: false, recent_visible: false }), "make training profile private");
+  const lockedMap = noError(await two.client.rpc("get_training_map", { target_user: one.id }), "other user receives locked map DTO");
+  assert.equal(lockedMap.locked, true); assert.equal(lockedMap.maps, null);
+  await expectError(two.client.rpc("get_training_heatmap", { target_user: one.id, from_date: null, to_date: null, platform_name: null }), "ordinary user cannot read private heatmap");
+  noError(await admin.client.rpc("get_training_heatmap", { target_user: one.id, from_date: null, to_date: null, platform_name: null }), "admin reads private heatmap through audited RPC");
+  const trainingAudit = noError(await one.client.rpc("get_training_access_audit", { target_user: one.id, limit_count: 20 }), "owner of data reads private heatmap audit");
+  assert(trainingAudit.some(v => v.actor_id === admin.id && v.resource === "private_heatmap"));
+  await expectError(one.client.from("submission_events").select("*"), "raw training submissions are service-only");
+  noError(await one.client.rpc("update_training_privacy", { accounts_visible: true, heatmap_visible: true, map_visible: true, recent_visible: true }), "restore public training profile");
+  ok("training map defaults, privacy, staff audit and raw-event isolation");
+  stage("training-privacy-passed");
+
   const privatePost = noError(await one.client.from("posts").insert({ user_id: one.id, title: "私有回归文章", content: "private regression content", visibility: "private" }).select().single(), "create private post");
   const publicPost = noError(await one.client.from("posts").insert({ user_id: one.id, title: "公开回归文章", content: "public regression content", visibility: "public" }).select().single(), "create public post");
   const visitorPosts = noError(await visitor.from("posts").select("id").in("id", [privatePost.id, publicPost.id]), "visitor reads posts");
