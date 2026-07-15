@@ -39,8 +39,8 @@ $("#modalConfirm").onclick = () => closeModal(true);
 $("#modalBackdrop").addEventListener("click", e => { if (e.target === e.currentTarget) closeModal(false); });
 
 // Navigation
-const titles = { home: "首页", vault: "模板库", stress: "代码对拍", roadmap: "任务导图", blogs: "我的博客", "blog-editor": "博客编辑器", square: "文章广场", discussion: "讨论区", article: "阅读文章", account: "个人中心", checkin: "每日签到", leaderboard: "排行榜", profile: "个人主页", admin: "管理后台" };
-const protectedPages = new Set(["vault", "stress", "roadmap", "blogs", "blog-editor", "checkin", "admin"]);
+const titles = { home: "首页", vault: "模板库", stress: "代码对拍", roadmap: "任务导图", blogs: "我的博客", "blog-editor": "博客编辑器", favorites: "我的收藏", square: "文章广场", discussion: "讨论区", article: "阅读文章", account: "个人中心", checkin: "每日签到", leaderboard: "排行榜", profile: "个人主页", admin: "管理后台" };
+const protectedPages = new Set(["vault", "stress", "roadmap", "blogs", "blog-editor", "favorites", "checkin", "admin"]);
 function route() {
   const path = location.hash.slice(1) || "home";
   const [name, id = ""] = path.split("/");
@@ -53,8 +53,10 @@ function route() {
   $$(".main-nav a").forEach(el => el.classList.toggle("active", el.dataset.page === page || (page === "blog-editor" && el.dataset.page === "blogs") || (page === "article" && el.dataset.page === "square") || (page === "profile" && el.dataset.page === "leaderboard")));
   $("#pageTitle").textContent = titles[page];
   $("#sidebar").classList.remove("open");
+  if ($("#sidebar").contains(document.activeElement)) document.activeElement.blur();
   if (page === "blogs") renderMyBlogs();
   if (page === "blog-editor") openBlogEditor(decodeURIComponent(id));
+  if (page === "favorites") renderFavorites();
   if (page === "square") renderSquare();
   if (page === "discussion") renderStationComments();
   if (page === "article") renderArticle(decodeURIComponent(id));
@@ -591,7 +593,8 @@ loadRoadmap();
 const BLOG_KEY = "leather-blogs-v1";
 const STATION_COMMENT_KEY = "leather-station-comments-v1";
 const COMMENT_RATE_KEY = "leather-comment-rate-v1";
-const blogStore = { blogs: [], station: [], selected: "", isNew: false, baseline: "", previewTimer: 0, autosaveTimer: 0, autosaveMinutes: 10, saving: false, discussionKind: "", replyTo: "", notifications: [] };
+const blogStore = { blogs: [], station: [], selected: "", isNew: false, baseline: "", previewTimer: 0, autosaveTimer: 0, autosaveEnabled: true, saving: false, snapshots: [], folders: [], selectedFolder: "", discussionKind: "", replyTo: "", notifications: [], notificationKind: "" };
+const rankingState = { mode: "activity", period: "week" };
 
 // The list is intentionally checked after Unicode/leet normalization and separator removal.
 const sensitiveTerms = [
@@ -740,8 +743,8 @@ function renderMarkdown(source) {
 }
 
 function loadBlogData() {
-  const savedAutosave = Number(localStorage.getItem("leather-blog-autosave-v1"));
-  if ([5,10,30].includes(savedAutosave)) blogStore.autosaveMinutes = savedAutosave;
+  const savedAutosave = localStorage.getItem("leather-blog-autosave-enabled-v1");
+  if (savedAutosave !== null) blogStore.autosaveEnabled = savedAutosave === "true";
   if (api.cloud.configured) { blogStore.blogs = []; blogStore.station = []; return; }
   try { blogStore.blogs = JSON.parse(localStorage.getItem(BLOG_KEY)) || []; } catch { blogStore.blogs = []; }
   try { blogStore.station = JSON.parse(localStorage.getItem(STATION_COMMENT_KEY)) || []; } catch { blogStore.station = []; }
@@ -800,11 +803,26 @@ function showBlogEditor(blog = null) {
   blogStore.baseline = blogEditorSnapshot();
   startBlogAutosave();
 }
-function openBlogEditor(id = "") {
+async function loadBlogVersions(postId) {
+  if (!api.cloud.configured || !postId) { blogStore.snapshots = []; renderBlogVersions(); return; }
+  try { blogStore.snapshots = await api.fetchPostSnapshots(postId); renderBlogVersions(); }
+  catch (error) { $("#blogVersionList").innerHTML = `<div class="empty-list">${esc(error.message)}</div>`; }
+}
+function renderBlogVersions() {
+  $("#blogVersionCount").textContent = `${blogStore.snapshots.length} 个版本`;
+  $("#blogVersionList").innerHTML = blogStore.snapshots.length ? blogStore.snapshots.map((snapshot, index) => `<article><div><b>${index === 0 ? "最近版本" : `历史版本 ${index + 1}`}</b><span>${nowText(Date.parse(snapshot.created_at))} · ${snapshot.visibility === "public" ? "公开" : "私有"}</span><small>${esc(snapshot.title)}</small></div><button class="btn ghost small restore-blog-version" data-id="${esc(snapshot.id)}" type="button">恢复</button></article>`).join("") : '<div class="empty-list">保存文章后会自动建立版本历史。</div>';
+  $$(".restore-blog-version", $("#blogVersionList")).forEach(button => button.onclick = async () => {
+    if (!confirm("恢复这个版本会覆盖当前文章，并自动保留恢复前的版本。确定继续吗？")) return;
+    try { await api.restorePostSnapshot(button.dataset.id); await reloadCloudContent(); const blog = blogStore.blogs.find(v => v.id === blogStore.selected); if (blog) showBlogEditor(blog); await loadBlogVersions(blogStore.selected); toast("博客版本已恢复"); }
+    catch (error) { toast(error.message, "error"); }
+  });
+}
+async function openBlogEditor(id = "") {
   const isNew = !id || id === "new";
   const blog = isNew ? null : blogStore.blogs.find(v => v.id === id && (!api.cloud.configured || v.userId === api.cloud.user?.id));
   if (!isNew && !blog) { toast("没有找到可编辑的文章", "error"); location.hash = "blogs"; return; }
   blogStore.selected = blog?.id || ""; blogStore.isNew = isNew; showBlogEditor(blog);
+  await loadBlogVersions(blog?.id || "");
   if (isNew) setTimeout(() => $("#blogTitle").focus(), 20);
 }
 $("#newBlogBtn").onclick = () => { location.hash = "blog-editor/new"; };
@@ -812,11 +830,11 @@ $("#myBlogSearch").oninput = renderMyBlogs;
 $("#myBlogVisibility").onchange = renderMyBlogs;
 function startBlogAutosave() {
   clearInterval(blogStore.autosaveTimer);
-  const minutes = [5,10,30].includes(Number(blogStore.autosaveMinutes)) ? Number(blogStore.autosaveMinutes) : 10;
-  $("#blogAutosaveHint").textContent = `自动保存：${minutes} 分钟`;
+  $("#blogAutosaveHint").textContent = blogStore.autosaveEnabled ? "自动保存：每 30 分钟" : "自动保存：已关闭";
+  if (!blogStore.autosaveEnabled) return;
   blogStore.autosaveTimer = setInterval(() => {
     if (isBlogDirty() && !blogStore.saving) saveCurrentBlog(true);
-  }, minutes * 60000);
+  }, 30 * 60000);
 }
 async function saveCurrentBlog(automatic = false) {
   if (blogStore.saving) return false;
@@ -832,6 +850,7 @@ async function saveCurrentBlog(automatic = false) {
       const saved = await api.savePost({ ...value, author: api.cloud.profile?.display_name || "Leather 用户", summary: value.summary || articleExcerpt(value) }, old?.id || null);
       blogStore.selected = saved.id; blogStore.isNew = false; await reloadCloudContent();
       const blog = blogStore.blogs.find(v => v.id === saved.id); if (blog) showBlogEditor(blog);
+      await loadBlogVersions(saved.id);
       history.replaceState(null, "", `#blog-editor/${encodeURIComponent(saved.id)}`);
     } else {
       const time = Date.now(); let blog = blogStore.blogs.find(v => v.id === blogStore.selected);
@@ -880,7 +899,7 @@ function renderSquare() {
   const blogs = blogStore.blogs.filter(blog => blog.visibility === "public" && (!key || `${blog.title} ${blog.summary} ${blog.author} ${blog.tags.join(" ")}`.toLowerCase().includes(key)));
   blogs.sort((a, b) => sort === "comments" ? b.comments.length - a.comments.length || b.updated - a.updated : sort === "created" ? b.created - a.created : b.updated - a.updated);
   $("#squareCount").textContent = `${blogs.length} 篇公开文章`;
-  $("#squareGrid").innerHTML = blogs.length ? blogs.map(blog => `<article class="square-card" data-id="${esc(blog.id)}" tabindex="0"><div class="square-card-top"><div class="tag-row">${blog.tags.slice(0, 3).map(tag => `<span class="tag">${esc(tag)}</span>`).join("") || '<span class="tag">未分类</span>'}</div><span>${nowText(blog.updated)}</span></div><h2>${esc(blog.title)}</h2><p>${esc(articleExcerpt(blog))}</p><footer><span>由 ${userNameHtml(blog.author || "匿名作者", blog.authorHandle, blog.authorRole, blog.authorColor, blog.userId)}</span><span>${blog.comments.length} 条评论　阅读 →</span></footer></article>`).join("") : '<div class="square-empty"><div>▦</div><h3>文章广场还是空的</h3><p>登录后把博客设为公开，它就会出现在这里。</p><a class="btn primary small" href="#blog-editor/new">去写第一篇</a></div>';
+  $("#squareGrid").innerHTML = blogs.length ? blogs.map(blog => `<article class="square-card" data-id="${esc(blog.id)}" tabindex="0"><div class="square-card-top"><div class="tag-row">${blog.tags.slice(0, 3).map(tag => `<span class="tag">${esc(tag)}</span>`).join("") || '<span class="tag">未分类</span>'}</div><span>${nowText(blog.updated)}</span></div><h2>${esc(blog.title)}</h2><p>${esc(articleExcerpt(blog))}</p><footer><span>由 ${userNameHtml(blog.author || "匿名作者", blog.authorHandle, blog.authorRole, blog.authorColor, blog.userId)}</span><span>♥ ${Number(blog.likeCount || 0)}　${blog.comments.length} 条评论　阅读 →</span></footer></article>`).join("") : '<div class="square-empty"><div>▦</div><h3>文章广场还是空的</h3><p>登录后把博客设为公开，它就会出现在这里。</p><a class="btn primary small" href="#blog-editor/new">去写第一篇</a></div>';
   $$(".square-card", $("#squareGrid")).forEach(card => {
     card.onclick = e => { if (e.target.closest(".user-name")) return; location.hash = `article/${encodeURIComponent(card.dataset.id)}`; };
     card.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); card.click(); } };
@@ -888,6 +907,26 @@ function renderSquare() {
 }
 $("#squareSearch").oninput = renderSquare;
 $("#squareSort").onchange = renderSquare;
+
+async function loadFavoriteFolders() {
+  if (!api.cloud.user) { blogStore.folders=[]; blogStore.selectedFolder=""; return; }
+  blogStore.folders = await api.fetchFavoriteFolders();
+  if (!blogStore.folders.some(v=>v.id===blogStore.selectedFolder)) blogStore.selectedFolder=blogStore.folders[0]?.id || "";
+}
+async function renderFavorites() {
+  if (!hasWriteAccess()) return;
+  try { if (!blogStore.folders.length) await loadFavoriteFolders(); } catch(error){ $("#favoritePostList").innerHTML=`<div class="empty-list">${esc(error.message)}</div>`; return; }
+  $("#favoriteFolderList").innerHTML = blogStore.folders.map(folder=>`<article class="favorite-folder ${folder.id===blogStore.selectedFolder?"active":""}" data-id="${esc(folder.id)}"><div><b>${esc(folder.name)}</b><span>${blogStore.blogs.filter(v=>v.favoriteFolderId===folder.id).length} 篇</span></div>${folder.is_default?"":`<span><button class="text-btn rename-favorite-folder" data-id="${esc(folder.id)}" type="button">重命名</button><button class="text-btn delete-favorite-folder" data-id="${esc(folder.id)}" type="button">删除</button></span>`}</article>`).join("") || '<div class="empty-list">暂无收藏夹</div>';
+  const current=blogStore.folders.find(v=>v.id===blogStore.selectedFolder), posts=blogStore.blogs.filter(v=>v.favorited && v.favoriteFolderId===blogStore.selectedFolder);
+  $("#favoriteFolderTitle").textContent=current?.name || "收藏夹"; $("#favoritePostCount").textContent=`${posts.length} 篇`;
+  $("#favoritePostList").innerHTML=posts.length?posts.map(blog=>`<article class="square-card favorite-post" data-id="${esc(blog.id)}"><div class="square-card-top"><span class="visibility-badge public">公开</span><button class="text-btn remove-favorite" data-id="${esc(blog.id)}" type="button">取消收藏</button></div><h2>${esc(blog.title)}</h2><p>${esc(articleExcerpt(blog))}</p><footer><span>${esc(blog.author)}</span><span>阅读 →</span></footer></article>`).join(""):'<div class="square-empty"><div>♡</div><h3>这个收藏夹还是空的</h3><p>在公开文章页面点击收藏。</p><a class="btn primary small" href="#square">浏览文章</a></div>';
+  $$(".favorite-folder",$("#favoriteFolderList")).forEach(folder=>folder.onclick=e=>{if(e.target.closest("button"))return;blogStore.selectedFolder=folder.dataset.id;renderFavorites();});
+  $$(".favorite-post",$("#favoritePostList")).forEach(card=>card.onclick=e=>{if(e.target.closest(".remove-favorite"))return;location.hash=`article/${encodeURIComponent(card.dataset.id)}`;});
+  $$(".remove-favorite",$("#favoritePostList")).forEach(button=>button.onclick=async()=>{try{await api.unfavoritePost(button.dataset.id);await reloadCloudContent();renderFavorites();}catch(error){toast(error.message,"error");}});
+  $$(".rename-favorite-folder",$("#favoriteFolderList")).forEach(button=>button.onclick=async()=>{const folder=blogStore.folders.find(v=>v.id===button.dataset.id),name=prompt("收藏夹名称：",folder?.name||"");if(!name?.trim())return;try{await api.renameFavoriteFolder(button.dataset.id,name);await loadFavoriteFolders();renderFavorites();}catch(error){toast(error.message,"error");}});
+  $$(".delete-favorite-folder",$("#favoriteFolderList")).forEach(button=>button.onclick=async()=>{if(!confirm("删除收藏夹会同时移除其中的收藏记录，确定继续吗？"))return;try{await api.deleteFavoriteFolder(button.dataset.id);await loadFavoriteFolders();await reloadCloudContent();renderFavorites();}catch(error){toast(error.message,"error");}});
+}
+$("#newFavoriteFolderBtn").onclick=async()=>{const name=prompt("新收藏夹名称：");if(!name?.trim())return;try{const folder=await api.createFavoriteFolder(name);await loadFavoriteFolders();blogStore.selectedFolder=folder.id;renderFavorites();}catch(error){toast(error.message,"error");}};
 
 function canManageUserContent(userId, role = "user") {
   if (!api.cloud.user) return false;
@@ -900,16 +939,22 @@ function userNameHtml(name, handle = "", role = "user", color = "blue", id = "")
   const link = id ? `#profile/${encodeURIComponent(id)}` : handle ? `#profile/${encodeURIComponent(handle)}` : "#leaderboard";
   return `<a class="user-name name-${role === "user" ? color : "purple"}" href="${link}">${esc(name || "Leather 用户")}</a>${badge}`;
 }
+let articleReplyTo = "";
 function commentHtml(comment) {
-  return `<article class="comment-item"><div>${userNameHtml(comment.author, comment.authorHandle, comment.authorRole, comment.authorColor, comment.userId)}<span>${nowText(comment.time)}</span>${api.cloud.configured && comment.userId === api.cloud.user?.id ? `<button class="text-btn edit-comment" data-id="${esc(comment.id)}">编辑</button>` : ""}${canManageUserContent(comment.userId, comment.authorRole) ? `<button class="text-btn delete-comment" data-id="${esc(comment.id)}">删除</button>` : ""}</div><p>${esc(comment.content).replace(/\n/g, "<br>")}</p></article>`;
+  const reply = comment.replyTo ? `<div class="discussion-reply-context">回复 @${esc(comment.replyHandle || comment.replyAuthor || "已删除用户")}</div>` : "";
+  return `<article class="comment-item"><div>${userNameHtml(comment.author, comment.authorHandle, comment.authorRole, comment.authorColor, comment.userId)}<span>${nowText(comment.time)}</span>${hasWriteAccess() ? `<button class="text-btn reply-post-comment" data-id="${esc(comment.id)}">回复</button>` : ""}${api.cloud.configured && comment.userId === api.cloud.user?.id ? `<button class="text-btn edit-comment" data-id="${esc(comment.id)}">编辑</button>` : ""}${canManageUserContent(comment.userId, comment.authorRole) ? `<button class="text-btn delete-comment" data-id="${esc(comment.id)}">删除</button>` : ""}</div>${reply}<p>${esc(comment.content).replace(/\n/g, "<br>")}</p></article>`;
 }
 function renderArticle(id) {
   const blog = blogStore.blogs.find(v => v.id === id), box = $("#articleView");
   if (!blog) { box.innerHTML = '<div class="square-empty"><div>?</div><h3>没有找到这篇文章</h3><p>它可能已经被删除，或链接不完整。</p><a class="btn primary small" href="#square">返回文章广场</a></div>'; return; }
   $("#articleBackBtn").textContent = blog.visibility === "public" ? "← 返回文章广场" : "← 返回我的博客";
   $("#articleBackBtn").onclick = () => { location.hash = blog.visibility === "public" ? "square" : "blogs"; };
-  box.innerHTML = `<article class="article-shell"><header class="article-header"><div class="tag-row">${blog.tags.map(tag => `<span class="tag">${esc(tag)}</span>`).join("")}</div><h1>${esc(blog.title)}</h1><p>${esc(blog.summary || articleExcerpt(blog))}</p><div><span>作者：${userNameHtml(blog.author || "匿名作者", blog.authorHandle, blog.authorRole, blog.authorColor, blog.userId)}</span><span>发布于 ${nowText(blog.created)}</span><span>更新于 ${nowText(blog.updated)}</span><span class="visibility-badge ${blog.visibility}">${blog.visibility === "public" ? "公开文章" : "私有文章"}</span></div></header><div class="markdown-body article-content">${renderMarkdown(blog.content)}</div></article>${blog.visibility === "public" ? `<section class="article-comments"><div class="comment-title"><div><span class="eyebrow">DISCUSSION</span><h2>文章评论</h2></div><span>${blog.comments.length} 条评论</span></div><form id="articleCommentForm" class="comment-form"><input id="articleCommentAuthor" maxlength="30" value="${esc(api.cloud.profile?.display_name || "")}" placeholder="登录后自动使用账号名称" readonly><textarea id="articleCommentContent" maxlength="1000" placeholder="针对文章内容友善讨论……" required></textarea><div><small>评论会同时经过前端提示和服务端最终审核。</small><button class="btn primary small" type="submit">发表评论</button></div></form><div id="articleCommentList" class="comment-list">${blog.comments.length ? [...blog.comments].reverse().map(commentHtml).join("") : '<div class="empty-list">还没有评论，来参与第一次讨论吧。</div>'}</div></section>` : '<div class="private-article-note">这是一篇私有文章，不会显示在文章广场，也不会开放评论。</div>'}`;
+  const folderOptions = blogStore.folders.map(folder => `<option value="${esc(folder.id)}" ${folder.id === blog.favoriteFolderId ? "selected" : ""}>${esc(folder.name)}</option>`).join("");
+  box.innerHTML = `<article class="article-shell"><header class="article-header"><div class="tag-row">${blog.tags.map(tag => `<span class="tag">${esc(tag)}</span>`).join("")}</div><h1>${esc(blog.title)}</h1><p>${esc(blog.summary || articleExcerpt(blog))}</p><div><span>作者：${userNameHtml(blog.author || "匿名作者", blog.authorHandle, blog.authorRole, blog.authorColor, blog.userId)}</span><span>发布于 ${nowText(blog.created)}</span><span>更新于 ${nowText(blog.updated)}</span><span class="visibility-badge ${blog.visibility}">${blog.visibility === "public" ? "公开文章" : "私有文章"}</span></div></header><div class="markdown-body article-content">${renderMarkdown(blog.content)}</div></article>${blog.visibility === "public" ? `<section class="article-engagement"><button class="engagement-btn ${blog.liked ? "active" : ""}" id="articleLikeBtn" type="button">♥ <b>${Number(blog.likeCount || 0)}</b> 点赞</button><button class="engagement-btn ${blog.favorited ? "active" : ""}" id="articleFavoriteBtn" type="button">★ ${blog.favorited ? "已收藏" : "收藏"}</button>${api.cloud.user ? `<select id="articleFavoriteFolder" aria-label="选择收藏夹">${folderOptions}</select>` : ""}<span>${Number(blog.favoriteCount || 0)} 人收藏</span></section><section class="article-comments"><div class="comment-title"><div><span class="eyebrow">DISCUSSION</span><h2>文章评论</h2></div><span>${blog.comments.length} 条评论</span></div><form id="articleCommentForm" class="comment-form"><input id="articleCommentAuthor" maxlength="30" value="${esc(api.cloud.profile?.display_name || "")}" placeholder="登录后自动使用账号名称" readonly><div id="articleReplyTarget" class="discussion-reply-target hidden"></div><textarea id="articleCommentContent" maxlength="1000" placeholder="针对文章内容友善讨论……" required></textarea><div><small>评论会同时经过前端提示和服务端最终审核。</small><button class="btn primary small" type="submit">发表评论</button></div></form><div id="articleCommentList" class="comment-list">${blog.comments.length ? [...blog.comments].reverse().map(commentHtml).join("") : '<div class="empty-list">还没有评论，来参与第一次讨论吧。</div>'}</div></section>` : '<div class="private-article-note">这是一篇私有文章，不会显示在文章广场，也不会开放评论。</div>'}`;
   if (blog.visibility !== "public") return;
+  $("#articleLikeBtn").onclick = async () => { if (!hasWriteAccess()) { location.hash="account"; return; } try { await api.togglePostLike(blog.id, blog.liked); await reloadCloudContent(); renderArticle(blog.id); } catch(error){toast(error.message,"error");} };
+  $("#articleFavoriteBtn").onclick = async () => { if (!hasWriteAccess()) { location.hash="account"; return; } try { if (blog.favorited) await api.unfavoritePost(blog.id); else await api.favoritePost(blog.id, $("#articleFavoriteFolder")?.value || null); await reloadCloudContent(); renderArticle(blog.id); toast(blog.favorited ? "已取消收藏" : "文章已收藏"); } catch(error){toast(error.message,"error");} };
+  $("#articleFavoriteFolder")?.addEventListener("change", async e => { if (!blog.favorited) return; try { await api.favoritePost(blog.id,e.target.value); await reloadCloudContent(); toast("已移动到新的收藏夹"); } catch(error){toast(error.message,"error");} });
   $("#articleCommentForm").onsubmit = async e => {
     e.preventDefault(); if (!api.cloud.user) { location.hash = "account"; toast("登录后才能评论", "error"); return; }
     const author = api.cloud.profile?.display_name || "Leather 用户", content = $("#articleCommentContent").value.trim();
@@ -922,10 +967,11 @@ function renderArticle(id) {
     if (blog.comments.some(v => normalizeSensitive(v.content).compact === normalizeSensitive(content).compact)) { toast("请勿重复提交相同评论", "error"); return; }
     if (!useCommentQuota()) { toast("提交过于频繁，请一分钟后再试", "error"); return; }
     if (api.cloud.configured) {
-      try { await api.addPostComment(blog.id, content); await reloadCloudContent(); renderArticle(blog.id); toast("评论已发表"); }
+      try { await api.addPostComment(blog.id, content, articleReplyTo || null); articleReplyTo=""; await reloadCloudContent(); renderArticle(blog.id); toast("评论已发表"); }
       catch (err) { toast(err.message, "error"); await handlePossibleBan(); }
     } else { blog.comments.push({ id: uid(), author, content, time: Date.now() }); localStorage.setItem("leather-comment-author-v1", author); saveBlogData("评论已发表"); renderArticle(blog.id); renderSquare(); }
   };
+  $$(".reply-post-comment", $("#articleCommentList")).forEach(button => button.onclick = () => { const comment=blog.comments.find(v=>v.id===button.dataset.id); if(!comment)return; articleReplyTo=comment.id; const mention=`@${comment.authorHandle || ""}`; if(comment.authorHandle && !$("#articleCommentContent").value.toLowerCase().includes(mention.toLowerCase())) $("#articleCommentContent").value=`${mention} ${$("#articleCommentContent").value}`.trimStart(); $("#articleReplyTarget").classList.remove("hidden"); $("#articleReplyTarget").innerHTML=`<span>正在回复 <b>@${esc(comment.authorHandle || comment.author)}</b></span><button class="text-btn" id="cancelArticleReply" type="button">取消</button>`; $("#cancelArticleReply").onclick=()=>{articleReplyTo="";$("#articleReplyTarget").classList.add("hidden");}; $("#articleCommentContent").focus(); });
   $$(".delete-comment", $("#articleCommentList")).forEach(button => button.onclick = async () => {
     if (!confirm("确定删除这条本地评论吗？")) return;
     if (api.cloud.configured) { try { await api.deletePostComment(button.dataset.id); await reloadCloudContent(); renderArticle(blog.id); toast("评论已删除"); } catch (error) { toast(error.message, "error"); } }
@@ -986,11 +1032,22 @@ $("#stationCommentForm").onsubmit = async e => {
 };
 
 function renderNotifications() {
-  const list = blogStore.notifications, unread = list.filter(v => !v.is_read).length;
+  const all = blogStore.notifications, unread = all.filter(v => !v.is_read).length;
+  const groups = { comments:new Set(["mention","discussion_reply","post_comment","comment_reply"]), follow:new Set(["follow"]), system:new Set(["system","achievement"]) };
+  const list = blogStore.notificationKind ? all.filter(v=>groups[blogStore.notificationKind]?.has(v.type)) : all;
   $("#notificationCount").textContent = unread > 99 ? "99+" : String(unread); $("#notificationCount").classList.toggle("hidden", !unread);
   $("#notificationBell").classList.toggle("has-unread", !!unread);
-  $("#notificationList").innerHTML = list.length ? list.map(item => `<button class="notification-item ${item.is_read ? "" : "unread"}" data-discussion="${esc(item.discussion_id)}" type="button"><b>@${esc(item.actor_handle)} 提及了你</b><span>${esc(item.discussion_content).slice(0,90)}</span><time>${nowText(Date.parse(item.created_at))}</time></button>`).join("") : '<div class="empty-list">还没有人提及你。</div>';
-  $$(".notification-item", $("#notificationList")).forEach(item => item.onclick = async () => { blogStore.focusDiscussion = item.dataset.discussion; $("#notificationPanel").classList.add("hidden"); location.hash = "discussion"; renderStationComments(); await markAllNotificationsRead(); });
+  $("#notificationList").innerHTML = list.length ? list.map((item,index) => `<button class="notification-item ${item.is_read ? "" : "unread"}" data-index="${index}" type="button"><b>${item.actor_handle ? `@${esc(item.actor_handle)} ` : "系统 · "}${esc(item.message || "发送了一条通知")}</b><span>${({mention:"提及",discussion_reply:"讨论回复",post_comment:"文章评论",comment_reply:"评论回复",follow:"新关注",system:"系统通知",achievement:"成就徽章"})[item.type] || "通知"}</span><time>${nowText(Date.parse(item.created_at))}</time></button>`).join("") : '<div class="empty-list">这个分类暂无通知。</div>';
+  $$(".notification-item", $("#notificationList")).forEach(button => button.onclick = async () => { await openNotification(list[Number(button.dataset.index)]); });
+}
+async function openNotification(item) {
+  if (!item) return; $("#notificationPanel").classList.add("hidden");
+  if (item.source_table === "station_comments") { blogStore.focusDiscussion=item.source_id; location.hash="discussion"; renderStationComments(); }
+  else if (item.source_table === "post_comments") { try { const postId=await api.fetchCommentPostId(item.source_id); if(postId)location.hash=`article/${encodeURIComponent(postId)}`; } catch(error){toast(error.message,"error");} }
+  else if (item.type === "follow" && item.actor_id) location.hash=`profile/${encodeURIComponent(item.actor_id)}`;
+  else if (item.type === "achievement") location.hash=`profile/${encodeURIComponent(api.cloud.user.id)}`;
+  else location.hash="account";
+  await markAllNotificationsRead();
 }
 async function refreshNotifications(showError = false) {
   if (!api.cloud.user) { blogStore.notifications = []; renderNotifications(); return; }
@@ -1000,6 +1057,7 @@ async function refreshNotifications(showError = false) {
 async function markAllNotificationsRead() { if (!api.cloud.user) return; try { await api.markMentionNotificationsRead(); await refreshNotifications(); } catch (error) { toast(error.message, "error"); } }
 $("#notificationBell").onclick = async e => { e.stopPropagation(); $("#notificationPanel").classList.toggle("hidden"); if (!$("#notificationPanel").classList.contains("hidden")) await refreshNotifications(true); };
 $("#markNotificationsRead").onclick = markAllNotificationsRead;
+$$("#notificationTabs button").forEach(button=>button.onclick=e=>{e.stopPropagation();blogStore.notificationKind=button.dataset.notice;$$("#notificationTabs button").forEach(v=>v.classList.toggle("active",v===button));renderNotifications();});
 document.addEventListener("click", e => { if (!$("#notificationWrap").contains(e.target)) $("#notificationPanel").classList.add("hidden"); });
 setInterval(() => { if (api.cloud.user) refreshNotifications(); }, 60000);
 
@@ -1126,7 +1184,7 @@ function renderAccount() {
     : "最大 2 MB，提交后等待管理员审核";
   $("#accountLevelSummary").innerHTML = profile.banned_at ? `<div class="ban-notice"><b>账号已封禁</b><p>${esc(profile.ban_reason || "内容违规")}</p></div>` : `<div class="score-orb name-${stats?.name_color || "blue"}">${Number(stats?.score || 0)}</div><div><b class="name-${stats?.name_color || "blue"}">${esc(profile.display_name)}</b>${roleBadge(profile.role)}<p>累计签到 ${Number(stats?.checkin_count || 0)} 次</p></div>`;
   $("#myPublicProfileBtn").href = `#profile/${encodeURIComponent(profile.id)}`;
-  $("#blogAutosaveInterval").value = String(blogStore.autosaveMinutes);
+  $("#blogAutosaveEnabled").checked = blogStore.autosaveEnabled;
 }
 
 $$('[data-auth-tab]').forEach(button => button.onclick = () => {
@@ -1161,14 +1219,14 @@ $("#passwordForm").onsubmit = async e => {
   try { await api.updatePassword(one); e.target.reset(); toast("密码已更新"); } catch (error) { $("#passwordError").textContent = error.message; }
 };
 $("#blogSettingsForm").onsubmit = async e => {
-  e.preventDefault(); const minutes = Number($("#blogAutosaveInterval").value);
-  try { blogStore.autosaveMinutes = api.cloud.configured ? await api.setBlogAutosaveMinutes(minutes) : minutes; if (!api.cloud.configured) localStorage.setItem("leather-blog-autosave-v1", String(minutes)); startBlogAutosave(); toast(`博客将每 ${minutes} 分钟自动保存`); }
+  e.preventDefault(); const enabled = $("#blogAutosaveEnabled").checked;
+  try { blogStore.autosaveEnabled = api.cloud.configured ? await api.setBlogAutosaveMinutes(enabled) : enabled; if (!api.cloud.configured) localStorage.setItem("leather-blog-autosave-enabled-v1", String(enabled)); startBlogAutosave(); toast(enabled ? "已开启博客自动保存：每 30 分钟" : "已关闭博客自动保存"); }
   catch (error) { toast(error.message, "error"); }
 };
 
 function showCheckin(result) {
-  if (!result) { $("#checkinNumber").textContent = "------"; $("#checkinRarity").textContent = "等待抽取"; $("#checkinRarity").className = "rarity-badge common"; $("#checkinMessage").textContent = "点击按钮完成三次独立抽取，展示最高评级。"; $("#dailyCheckinBtn").disabled = false; $("#dailyCheckinBtn").textContent = "抽取幸运数字并签到"; return; }
-  $("#checkinNumber").textContent = String(result.number).padStart(6, "0"); $("#checkinRarity").textContent = result.rarity_label; $("#checkinRarity").className = `rarity-badge ${result.rarity}`;
+  if (!result) { $("#checkinNumber").textContent = "------"; $("#checkinNumber").className="rng-number rarity-color-common"; $("#checkinRarity").textContent = "等待抽取"; $("#checkinRarity").className = "rarity-badge common"; $("#checkinMessage").textContent = "点击按钮完成十次独立抽取，展示最高评级。"; $("#dailyCheckinBtn").disabled = false; $("#dailyCheckinBtn").textContent = "抽取幸运数字并签到"; return; }
+  $("#checkinNumber").textContent = String(result.number).padStart(6, "0"); $("#checkinNumber").className=`rng-number rarity-color-${result.rarity}`; $("#checkinRarity").textContent = result.rarity_label; $("#checkinRarity").className = `rarity-badge ${result.rarity}`;
   $("#checkinMessage").textContent = `今日签到完成 · ${Number(result.draw_count || 1)} 次抽取中的最高评级`; $("#dailyCheckinBtn").disabled = true; $("#dailyCheckinBtn").textContent = "今天已经签到";
 }
 async function renderCheckinPage() {
@@ -1176,7 +1234,7 @@ async function renderCheckinPage() {
   try {
     const history = await api.fetchCheckins(), today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(new Date()), current = history.find(v => v.checkin_date === today);
     showCheckin(current); $("#checkinHistoryCount").textContent = `${history.length} 次`;
-    $("#checkinHistoryList").innerHTML = history.length ? history.map(item => `<article class="checkin-chip ${item.rarity}"><span>${esc(item.checkin_date)} · ${Number(item.draw_count || 1)} 抽</span><b>${String(item.number).padStart(6, "0")}</b><em>${esc(item.rarity_label)}</em></article>`).join("") : '<div class="empty-list">还没有签到记录。</div>';
+    $("#checkinHistoryList").innerHTML = history.length ? history.map(item => `<article class="checkin-chip ${item.rarity}"><span>${esc(item.checkin_date)} · ${Number(item.draw_count || 1)} 抽</span><b class="rarity-color-${item.rarity}">${String(item.number).padStart(6, "0")}</b><em>${esc(item.rarity_label)}</em></article>`).join("") : '<div class="empty-list">还没有签到记录。</div>';
   } catch (error) { toast(error.message, "error"); }
 }
 $("#dailyCheckinBtn").onclick = async () => {
@@ -1188,18 +1246,29 @@ $("#dailyCheckinBtn").onclick = async () => {
 async function renderLeaderboard() {
   if (!api.cloud.configured) { $("#leaderboardList").innerHTML = '<div class="square-empty"><div>♜</div><h3>等待 Supabase 配置</h3><p>配置环境变量并应用数据库迁移后，排行榜会显示所有用户。</p></div>'; return; }
   try {
-    const list = await api.fetchLeaderboard($("#userSearch").value);
-    $("#leaderboardList").innerHTML = list.length ? list.map((profile, i) => `<a class="rank-row" href="#profile/${encodeURIComponent(profile.id)}"><span class="rank-no">${String(i + 1).padStart(2, "0")}</span>${avatarHtml(profile)}<div class="rank-user"><b class="name-${profile.role === "user" ? profile.name_color : "purple"}">${esc(profile.display_name)}</b>${roleBadge(profile.role)}<small>@${esc(profile.handle)}</small></div><div class="rank-stat"><b>${Number(profile.score)}</b><span>等级分</span></div><div class="rank-stat"><b>${Number(profile.checkin_count)}</b><span>签到</span></div></a>`).join("") : '<div class="square-empty"><div>♜</div><h3>没有找到用户</h3><p>尝试更换名字或 ID。</p></div>';
+    if(rankingState.mode==="activity"){
+      const list = await api.fetchLeaderboard($("#userSearch").value);
+      $("#leaderboardList").className="leaderboard-list";
+      $("#leaderboardList").innerHTML = list.length ? list.map((profile, i) => `<a class="rank-row" href="#profile/${encodeURIComponent(profile.id)}"><span class="rank-no">${String(i + 1).padStart(2, "0")}</span>${avatarHtml(profile)}<div class="rank-user"><b class="name-${profile.role === "user" ? profile.name_color : "purple"}">${esc(profile.display_name)}</b>${roleBadge(profile.role)}<small>@${esc(profile.handle)}</small></div><div class="rank-stat"><b>${Number(profile.score)}</b><span>等级分</span></div><div class="rank-stat"><b>${Number(profile.checkin_count)}</b><span>签到</span></div></a>`).join("") : '<div class="square-empty"><div>♜</div><h3>没有找到用户</h3><p>尝试更换名字或 ID。</p></div>';
+    }else{
+      const list=await api.fetchLuckLeaderboard(rankingState.period); $("#leaderboardList").className="leaderboard-list luck-leaderboard";
+      $("#leaderboardList").innerHTML=list.length?list.map((row,i)=>`<a class="rank-row luck-rank-row" href="#profile/${encodeURIComponent(row.user_id)}"><span class="rank-no">${String(i+1).padStart(2,"0")}</span>${avatarHtml(row)}<div class="rank-user"><b class="name-${row.role==="user"?row.name_color:"purple"}">${esc(row.display_name)}</b>${roleBadge(row.role)}<small>@${esc(row.handle)}</small></div><div class="luck-number rarity-color-${row.rarity}">${String(row.number).padStart(6,"0")}</div><div class="rank-stat"><b class="rarity-color-${row.rarity}">${esc(row.rarity_label)}</b><span>${nowText(Date.parse(row.achieved_at))} 达成</span></div></a>`).join(""):'<div class="square-empty"><div>◇</div><h3>本榜暂无签到记录</h3><p>完成每日幸运签到后即可进入欧皇榜。</p></div>';
+    }
   } catch (error) { $("#leaderboardList").innerHTML = `<div class="empty-list">${esc(error.message)}</div>`; }
 }
 $("#userSearch").oninput = () => { clearTimeout(leaderboardTimer); leaderboardTimer = setTimeout(renderLeaderboard, 260); };
+$$("#rankingTabs button").forEach(button=>button.onclick=()=>{rankingState.mode=button.dataset.ranking;$$("#rankingTabs button").forEach(v=>v.classList.toggle("active",v===button));$("#activitySearchBox").classList.toggle("hidden",rankingState.mode!=="activity");$("#luckPeriodTabs").classList.toggle("hidden",rankingState.mode!=="luck");$("#leaderboardCaption").textContent=rankingState.mode==="activity"?"分数实时计算":"同等级按更早达成优先";renderLeaderboard();});
+$$("#luckPeriodTabs button").forEach(button=>button.onclick=()=>{rankingState.period=button.dataset.period;$$("#luckPeriodTabs button").forEach(v=>v.classList.toggle("active",v===button));renderLeaderboard();});
 async function renderPublicProfile(id) {
   if (!api.cloud.configured) { $("#publicProfileView").innerHTML = '<div class="square-empty"><h3>等待 Supabase 配置</h3><a class="btn primary small" href="#account">查看配置提示</a></div>'; return; }
   const target = id || api.cloud.user?.id; if (!target) { $("#publicProfileView").innerHTML = '<div class="square-empty"><h3>用户不存在</h3></div>'; return; }
   try {
     const profile = await api.fetchPublicProfile(target); if (!profile) throw new Error("没有找到这个用户");
+    const [achievements, following] = await Promise.all([api.fetchUserAchievements(profile.id), api.isFollowingUser(profile.id)]);
     const articles = blogStore.blogs.filter(v => v.userId === profile.id && v.visibility === "public").sort((a,b) => b.updated-a.updated);
-    $("#publicProfileView").innerHTML = `<section class="public-profile-card">${avatarHtml(profile,"xlarge")}<div><span class="eyebrow">PUBLIC PROFILE</span><h1 class="name-${profile.role === "user" ? profile.name_color : "purple"}">${esc(profile.display_name)}</h1><p class="profile-handle">@${esc(profile.handle)} ${roleBadge(profile.role)}</p><p>${esc(profile.bio || "这个用户还没有填写个人简介。")}</p><div class="profile-stats"><span><b>${Number(profile.score)}</b>等级分</span><span><b>${Number(profile.checkin_count)}</b>签到次数</span><span><b>${articles.length}</b>公开文章</span></div></div></section><section class="profile-articles"><div class="comment-title"><div><span class="eyebrow">PUBLIC POSTS</span><h2>公开文章</h2></div></div><div class="square-grid">${articles.length ? articles.map(blog => `<article class="square-card profile-post" data-id="${blog.id}"><h2>${esc(blog.title)}</h2><p>${esc(articleExcerpt(blog))}</p><footer><span>${nowText(blog.updated)}</span><span>${blog.comments.length} 条评论　阅读 →</span></footer></article>`).join("") : '<div class="empty-list">暂无公开文章。</div>'}</div></section>`;
+    const followButton = api.cloud.user && api.cloud.user.id!==profile.id ? `<button class="btn ${following?"ghost":"primary"} small" id="profileFollowBtn" type="button">${following?"已关注 · 取消":"＋ 关注"}</button>` : "";
+    $("#publicProfileView").innerHTML = `<section class="public-profile-card">${avatarHtml(profile,"xlarge")}<div><span class="eyebrow">PUBLIC PROFILE</span><div class="profile-name-row"><h1 class="name-${profile.role === "user" ? profile.name_color : "purple"}">${esc(profile.display_name)}</h1>${followButton}</div><p class="profile-handle">@${esc(profile.handle)} ${roleBadge(profile.role)}</p><p>${esc(profile.bio || "这个用户还没有填写个人简介。")}</p><div class="profile-stats"><span><b>${Number(profile.score)}</b>等级分</span><span><b>${Number(profile.checkin_count)}</b>签到次数</span><span><b>${articles.length}</b>公开文章</span><span><b>${Number(profile.follower_count||0)}</b>粉丝</span><span><b>${Number(profile.following_count||0)}</b>关注</span></div></div></section><section class="achievement-section"><div class="comment-title"><div><span class="eyebrow">ACHIEVEMENTS</span><h2>成就徽章</h2></div><span>${achievements.length} 枚</span></div><div class="achievement-grid">${achievements.length?achievements.map(item=>`<article><i>${esc(item.icon)}</i><div><b>${esc(item.name)}</b><p>${esc(item.description)}</p><span>${esc(item.detail||"")} · ${nowText(Date.parse(item.achieved_at))}</span></div></article>`).join(""):'<div class="empty-list">继续签到、写作和讨论即可解锁徽章。</div>'}</div></section><section class="profile-articles"><div class="comment-title"><div><span class="eyebrow">PUBLIC POSTS</span><h2>公开文章</h2></div></div><div class="square-grid">${articles.length ? articles.map(blog => `<article class="square-card profile-post" data-id="${blog.id}"><h2>${esc(blog.title)}</h2><p>${esc(articleExcerpt(blog))}</p><footer><span>${nowText(blog.updated)}</span><span>♥ ${Number(blog.likeCount||0)}　${blog.comments.length} 条评论　阅读 →</span></footer></article>`).join("") : '<div class="empty-list">暂无公开文章。</div>'}</div></section>`;
+    $("#profileFollowBtn")?.addEventListener("click",async()=>{try{if(following)await api.unfollowUser(profile.id);else await api.followUser(profile.id);await renderPublicProfile(profile.id);toast(following?"已取消关注":"关注成功");}catch(error){toast(error.message,"error");}});
     $$(".profile-post", $("#publicProfileView")).forEach(card => card.onclick = () => location.hash = `article/${encodeURIComponent(card.dataset.id)}`);
   } catch (error) { $("#publicProfileView").innerHTML = `<div class="square-empty"><div>?</div><h3>${esc(error.message)}</h3><a class="btn primary small" href="#leaderboard">返回排行榜</a></div>`; }
 }
@@ -1274,8 +1343,9 @@ $("#adminContentType").onchange = renderAdminContent; $("#refreshAdminBtn").oncl
 
 async function onCloudAuthChange(event) {
   if (api.cloud.user) {
-    try { blogStore.autosaveMinutes = await api.fetchBlogAutosaveMinutes(); } catch { blogStore.autosaveMinutes = 10; }
-  } else { blogStore.notifications = []; }
+    try { blogStore.autosaveEnabled = await api.fetchBlogAutosaveMinutes(); } catch { blogStore.autosaveEnabled = true; }
+    try { await loadFavoriteFolders(); } catch { blogStore.folders=[]; }
+  } else { blogStore.notifications = []; blogStore.folders=[]; blogStore.selectedFolder=""; }
   applyAuthState();
   await reloadCloudContent();
   await refreshNotifications();

@@ -22,6 +22,7 @@
         <a href="#stress" data-page="stress"><span class="nav-icon">⇄</span><span>代码对拍</span></a>
         <a href="#roadmap" data-page="roadmap"><span class="nav-icon">⌁</span><span>任务导图</span></a>
         <a href="#blogs" data-page="blogs"><span class="nav-icon">✎</span><span>我的博客</span></a>
+        <a href="#favorites" data-page="favorites"><span class="nav-icon">♡</span><span>我的收藏</span></a>
         <a href="#square" data-page="square"><span class="nav-icon">▦</span><span>文章广场</span></a>
         <a href="#discussion" data-page="discussion"><span class="nav-icon">☵</span><span>讨论区</span></a>
         <a href="#checkin" data-page="checkin"><span class="nav-icon">◉</span><span>每日签到</span></a>
@@ -43,7 +44,7 @@
           <span class="save-state" id="saveState"><i></i>正在连接</span>
           <div class="notification-wrap hidden" id="notificationWrap">
             <button class="notification-bell" id="notificationBell" type="button" aria-label="查看提及通知">♢<span class="hidden" id="notificationCount">0</span></button>
-            <div class="notification-panel hidden" id="notificationPanel"><header><b>提及我的讨论</b><button class="text-btn" id="markNotificationsRead" type="button">全部已读</button></header><div id="notificationList"></div></div>
+            <div class="notification-panel hidden" id="notificationPanel"><header><b>消息通知</b><button class="text-btn" id="markNotificationsRead" type="button">全部已读</button></header><nav class="notification-tabs" id="notificationTabs"><button class="active" data-notice="" type="button">全部</button><button data-notice="comments" type="button">评论回复</button><button data-notice="follow" type="button">关注</button><button data-notice="system" type="button">系统</button></nav><div id="notificationList"></div></div>
           </div>
           <a class="account-chip" id="topAccountBtn" href="#account"><span class="account-avatar" id="topAccountAvatar">?</span><span id="topAccountName">登录</span></a>
         </div>
@@ -264,8 +265,14 @@
             <section><header><b>预览</b><span>实时更新</span></header><div id="blogPreview" class="markdown-body blog-preview"></div></section>
           </div>
           <p class="form-error" id="blogFormError" role="alert"></p>
-          <div class="blog-editor-actions"><span id="blogAutosaveHint">自动保存：10 分钟</span><button class="btn ghost" id="viewBlogBtn" type="button">阅读模式</button><button class="btn primary" type="submit">保存文章</button></div>
+          <div class="blog-editor-actions"><span id="blogAutosaveHint">自动保存：每 30 分钟</span><button class="btn ghost" id="viewBlogBtn" type="button">阅读模式</button><button class="btn primary" type="submit">保存文章</button></div>
+          <section class="blog-version-panel"><div class="version-head"><div><b>版本历史</b><span>最多保留 100 个版本</span></div><span id="blogVersionCount">0 个版本</span></div><div id="blogVersionList" class="blog-version-list"></div></section>
         </form>
+      </section>
+
+      <section class="page" id="page-favorites" data-title="我的收藏">
+        <div class="workspace-head"><div><span class="eyebrow">MY COLLECTIONS</span><h1>把值得重读的文章收好。</h1><p>建立多个收藏夹，随时移动或取消收藏。</p></div><button class="btn primary" id="newFavoriteFolderBtn" type="button">＋ 新建收藏夹</button></div>
+        <div class="favorite-layout"><aside id="favoriteFolderList" class="favorite-folder-list"></aside><section><div class="favorite-head"><h2 id="favoriteFolderTitle">默认收藏夹</h2><span id="favoritePostCount">0 篇</span></div><div id="favoritePostList" class="square-grid"></div></section></div>
       </section>
 
       <section class="page" id="page-square" data-title="文章广场">
@@ -338,7 +345,7 @@
             </form>
             <div class="account-side-cards">
               <section class="settings-card profile-level-card"><h2>当前等级</h2><div id="accountLevelSummary"></div><a class="btn ghost small" id="myPublicProfileBtn" href="#profile">查看公开主页</a></section>
-              <form id="blogSettingsForm" class="settings-card"><h2>博客自动保存</h2><label>保存间隔<select id="blogAutosaveInterval"><option value="5">每 5 分钟</option><option value="10">每 10 分钟</option><option value="30">每 30 分钟</option></select></label><small>仅在文章有修改且标题、正文完整时自动保存。</small><button class="btn ghost small" type="submit">保存设置</button></form>
+              <form id="blogSettingsForm" class="settings-card"><h2>博客自动保存</h2><label class="switch-setting"><input id="blogAutosaveEnabled" type="checkbox"><span></span><b>开启自动保存</b></label><small>开启后每 30 分钟保存一次，并生成可恢复的博客版本；关闭后仅手动保存。</small><button class="btn ghost small" type="submit">保存设置</button></form>
               <form id="passwordForm" class="settings-card"><h2>修改密码</h2><label>新密码<input id="newPassword" type="password" minlength="8" maxlength="72" autocomplete="new-password" required></label><label>确认新密码<input id="newPasswordConfirm" type="password" minlength="8" maxlength="72" autocomplete="new-password" required></label><p class="form-error" id="passwordError"></p><button class="btn dark" type="submit">更新密码</button></form>
             </div>
           </div>
@@ -346,17 +353,18 @@
       </section>
 
       <section class="page" id="page-checkin" data-title="每日签到">
-        <div class="workspace-head checkin-head"><div><span class="eyebrow">DAILY LUCKY CHECK-IN</span><h1>今天，会抽到怎样的数字？</h1><p>每天仅可签到一次。服务端独立生成 3 个安全随机六位数，展示评级最高的一个。</p></div><a class="btn ghost" href="#leaderboard">查看排行榜</a></div>
+        <div class="workspace-head checkin-head"><div><span class="eyebrow">DAILY LUCKY CHECK-IN</span><h1>今天，会抽到怎样的数字？</h1><p>每天仅可签到一次。服务端独立生成 10 个安全随机六位数，展示评级最高的一个。</p></div><a class="btn ghost" href="#leaderboard">查看排行榜</a></div>
         <div class="checkin-layout">
-          <section class="rng-card"><div class="rng-date" id="checkinDate">今日签到</div><div class="rng-number" id="checkinNumber">------</div><div class="rarity-badge common" id="checkinRarity">等待抽取</div><p id="checkinMessage">点击按钮生成今天唯一的随机数字。</p><button class="btn primary wide" id="dailyCheckinBtn">生成数字并签到</button></section>
-          <section class="rarity-rules"><span class="eyebrow">RARITY RULES</span><h2>稀有度规则</h2><div class="rarity-rule-list"><article class="legendary"><b>传说</b><span>六位相同、完整正序或倒序</span></article><article class="epic"><b>史诗</b><span>回文、两组三位相同、四位以上相同</span></article><article class="rare"><b>稀有</b><span>刻子、三组对子</span></article><article class="uncommon"><b>少见</b><span>对子、三位顺子</span></article><article class="common"><b>普通</b><span>没有命中特殊数字形态</span></article></div><p>每天三次独立抽取并展示最高评级；稀有度不额外增加积分。</p></section>
+          <section class="rng-card"><div class="rng-date" id="checkinDate">今日签到</div><div class="rng-number rarity-color-common" id="checkinNumber">------</div><div class="rarity-badge common" id="checkinRarity">等待抽取</div><p id="checkinMessage">点击按钮完成十次独立抽取。</p><button class="btn primary wide" id="dailyCheckinBtn">抽取幸运数字并签到</button></section>
+          <section class="rarity-rules"><span class="eyebrow">RARITY RULES</span><h2>稀有度规则</h2><div class="rarity-rule-list"><article class="chromatic"><b>炫彩</b><span>精确抽中 111101</span></article><article class="legendary"><b>传说</b><span>六位相同、完整正序或倒序</span></article><article class="epic"><b>史诗</b><span>回文、两组三位相同、四位以上相同</span></article><article class="rare"><b>稀有</b><span>刻子、三组对子</span></article><article class="uncommon"><b>少见</b><span>对子、三位顺子</span></article><article class="common"><b>普通</b><span>没有命中特殊数字形态</span></article></div><p>每天十次独立抽取并展示最高评级；稀有度不额外增加活跃积分。</p></section>
         </div>
         <section class="checkin-history"><div class="comment-title"><div><span class="eyebrow">HISTORY</span><h2>我的签到记录</h2></div><span id="checkinHistoryCount">0 次</span></div><div id="checkinHistoryList" class="checkin-history-list"></div></section>
       </section>
 
       <section class="page" id="page-leaderboard" data-title="排行榜">
-        <div class="workspace-head"><div><span class="eyebrow">LEATHER RANKING</span><h1>坚持签到，也认识同行的人。</h1><p>签到日 +5 分；已经结束但未签到的日期 -1 分。管理员和站长名称固定显示为紫色。</p></div></div>
-        <div class="leaderboard-toolbar"><div class="search-box">⌕<input id="userSearch" maxlength="30" placeholder="搜索名字或 @ID"></div><span>分数实时计算</span></div>
+        <div class="workspace-head"><div><span class="eyebrow">LEATHER RANKING</span><h1>活跃与幸运，都留下记录。</h1><p>活跃榜按等级分排序；欧皇榜展示本周或历史最佳数字，同等级按更早达成者优先。</p></div></div>
+        <div class="ranking-tabs" id="rankingTabs"><button class="active" data-ranking="activity" type="button">活跃度排名</button><button data-ranking="luck" type="button">欧皇排名</button></div>
+        <div class="leaderboard-toolbar"><div class="search-box" id="activitySearchBox">⌕<input id="userSearch" maxlength="30" placeholder="搜索名字或 @ID"></div><div class="luck-period-tabs hidden" id="luckPeriodTabs"><button class="active" data-period="week" type="button">本周榜</button><button data-period="history" type="button">历史榜</button></div><span id="leaderboardCaption">分数实时计算</span></div>
         <div id="leaderboardList" class="leaderboard-list"></div>
       </section>
 

@@ -2,7 +2,7 @@ import { supabase, supabaseConfigured, supabaseErrorText, turnstileConfigured, t
 
 export { turnstileConfigured, turnstileSiteKey };
 
-export const cloud = { configured: supabaseConfigured, user: null, profile: null, stats: null, avatarRequest: null, session: null, authReady: false, blogAutosaveMinutes: 10 };
+export const cloud = { configured: supabaseConfigured, user: null, profile: null, stats: null, avatarRequest: null, session: null, authReady: false, blogAutosaveEnabled: true };
 
 function fail(error) { if (error) throw new Error(supabaseErrorText(error)); }
 function redirectUrl() { return `${location.origin}${location.pathname}`; }
@@ -75,18 +75,24 @@ async function profilesByIds(ids) {
 function profileName(profile) { return profile?.display_name || profile?.handle || "Leather 用户"; }
 
 export async function fetchBlogData() {
-  const [{ data: posts, error: postError }, { data: comments, error: commentError }, { data: station, error: stationError }] = await Promise.all([
+  const [{ data: posts, error: postError }, { data: comments, error: commentError }, { data: station, error: stationError }, { data: engagement, error: engagementError }, likesResult, favoritesResult] = await Promise.all([
     supabase.from("posts").select("*").order("updated_at", { ascending: false }).limit(500),
     supabase.from("post_comments").select("*").order("created_at", { ascending: true }).limit(5000),
-    supabase.from("station_comments").select("*").order("created_at", { ascending: true }).limit(500)
+    supabase.from("station_comments").select("*").order("created_at", { ascending: true }).limit(500),
+    supabase.from("post_engagement").select("*").limit(1000),
+    cloud.user ? supabase.from("post_likes").select("post_id").eq("user_id", cloud.user.id) : Promise.resolve({ data: [], error: null }),
+    cloud.user ? supabase.from("post_favorites").select("post_id,folder_id").eq("user_id", cloud.user.id) : Promise.resolve({ data: [], error: null })
   ]);
-  fail(postError); fail(commentError); fail(stationError);
+  fail(postError); fail(commentError); fail(stationError); fail(engagementError); fail(likesResult.error); fail(favoritesResult.error);
   const profiles = await profilesByIds([...(posts || []).map(v => v.user_id), ...(comments || []).map(v => v.user_id), ...(station || []).map(v => v.user_id)]);
+  const engagementMap = new Map((engagement || []).map(v => [v.post_id, v])), liked = new Set((likesResult.data || []).map(v => v.post_id)), favorites = new Map((favoritesResult.data || []).map(v => [v.post_id, v.folder_id]));
   const grouped = new Map();
   for (const item of comments || []) { if (!grouped.has(item.post_id)) grouped.set(item.post_id, []); grouped.get(item.post_id).push(item); }
   const blogs = (posts || []).map(item => {
     const author = profiles.get(item.user_id);
-    return { id: item.id, userId: item.user_id, title: item.title, author: profileName(author), authorHandle: author?.handle || "", authorRole: author?.role || "user", authorColor: author?.name_color || "blue", summary: item.summary, content: item.content, tags: item.tags || [], visibility: item.visibility, created: Date.parse(item.created_at), updated: Date.parse(item.updated_at), comments: (grouped.get(item.id) || []).map(comment => { const owner = profiles.get(comment.user_id); return { id: comment.id, userId: comment.user_id, author: profileName(owner), authorHandle: owner?.handle || "", authorRole: owner?.role || "user", authorColor: owner?.name_color || "blue", content: comment.content, time: Date.parse(comment.created_at) }; }) };
+    const stats = engagementMap.get(item.id) || {};
+    const commentRows = grouped.get(item.id) || [], commentMap = new Map(commentRows.map(v => [v.id, v]));
+    return { id: item.id, userId: item.user_id, title: item.title, author: profileName(author), authorHandle: author?.handle || "", authorRole: author?.role || "user", authorColor: author?.name_color || "blue", summary: item.summary, content: item.content, tags: item.tags || [], visibility: item.visibility, created: Date.parse(item.created_at), updated: Date.parse(item.updated_at), likeCount: Number(stats.like_count || 0), favoriteCount: Number(stats.favorite_count || 0), liked: liked.has(item.id), favorited: favorites.has(item.id), favoriteFolderId: favorites.get(item.id) || "", comments: commentRows.map(comment => { const owner = profiles.get(comment.user_id), parent = commentMap.get(comment.reply_to), parentOwner = parent ? profiles.get(parent.user_id) : null; return { id: comment.id, userId: comment.user_id, author: profileName(owner), authorHandle: owner?.handle || "", authorRole: owner?.role || "user", authorColor: owner?.name_color || "blue", content: comment.content, time: Date.parse(comment.created_at), replyTo: comment.reply_to || "", replyHandle: parentOwner?.handle || "", replyAuthor: profileName(parentOwner) }; }) };
   });
   const stationMap = new Map((station || []).map(comment => [comment.id, comment]));
   const stationComments = (station || []).map(comment => {
@@ -106,17 +112,33 @@ export async function savePost(value, id = null) {
   return data;
 }
 export async function deletePost(id) { const { error } = await supabase.from("posts").delete().eq("id", id); fail(error); }
-export async function addPostComment(postId, content) { const { data, error } = await supabase.from("post_comments").insert({ post_id: postId, user_id: cloud.user.id, content }).select().maybeSingle(); fail(error); if (!data) throw new Error("评论被服务端审核拦截"); return data; }
+export async function addPostComment(postId, content, replyTo = null) { const { data, error } = await supabase.from("post_comments").insert({ post_id: postId, user_id: cloud.user.id, content, reply_to: replyTo || null }).select().maybeSingle(); fail(error); if (!data) throw new Error("评论被服务端审核拦截"); return data; }
 export async function updatePostComment(id, content) { const { data, error } = await supabase.from("post_comments").update({ content, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", cloud.user.id).select().maybeSingle(); fail(error); if (!data) throw new Error("评论未更新，可能被服务端审核删除"); return data; }
 export async function deletePostComment(id) { const { error } = await supabase.from("post_comments").delete().eq("id", id); fail(error); }
 export async function addStationComment(kind, content, replyTo = null) { const { data, error } = await supabase.from("station_comments").insert({ user_id: cloud.user.id, kind, content, reply_to: replyTo || null }).select().maybeSingle(); fail(error); if (!data) throw new Error("讨论被服务端审核拦截"); return data; }
 export async function updateStationComment(id, content) { const { data, error } = await supabase.from("station_comments").update({ content, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", cloud.user.id).select().maybeSingle(); fail(error); if (!data) throw new Error("讨论未更新，可能被服务端审核删除"); return data; }
 export async function deleteStationComment(id) { const { error } = await supabase.from("station_comments").delete().eq("id", id); fail(error); }
 
-export async function fetchMentionNotifications() { const { data, error } = await supabase.rpc("get_mention_notifications", { limit_count: 50 }); fail(error); return data || []; }
-export async function markMentionNotificationsRead() { const { data, error } = await supabase.rpc("mark_mention_notifications_read"); fail(error); return Number(data || 0); }
-export async function fetchBlogAutosaveMinutes() { const { data, error } = await supabase.rpc("get_blog_autosave_minutes"); fail(error); cloud.blogAutosaveMinutes = [5,10,30].includes(Number(data)) ? Number(data) : 10; return cloud.blogAutosaveMinutes; }
-export async function setBlogAutosaveMinutes(minutes) { const value = Number(minutes); if (![5,10,30].includes(value)) throw new Error("自动保存间隔无效"); const { error } = await supabase.rpc("set_blog_autosave_minutes", { p_minutes: value }); fail(error); cloud.blogAutosaveMinutes = value; return value; }
+export async function fetchMentionNotifications() { const { data, error } = await supabase.rpc("get_notifications", { limit_count: 100 }); fail(error); return data || []; }
+export async function markMentionNotificationsRead() { const { data, error } = await supabase.rpc("mark_notifications_read"); fail(error); return Number(data || 0); }
+export async function fetchBlogAutosaveMinutes() { const { data, error } = await supabase.rpc("get_blog_autosave_minutes"); fail(error); cloud.blogAutosaveEnabled = Number(data) === 30; return cloud.blogAutosaveEnabled; }
+export async function setBlogAutosaveMinutes(enabled) { const value = enabled ? 30 : 0; const { error } = await supabase.rpc("set_blog_autosave_minutes", { p_minutes: value }); fail(error); cloud.blogAutosaveEnabled = !!enabled; return cloud.blogAutosaveEnabled; }
+
+export async function fetchPostSnapshots(postId) { const { data, error } = await supabase.from("post_snapshots").select("*").eq("post_id", postId).order("created_at", { ascending: false }).limit(100); fail(error); return data || []; }
+export async function restorePostSnapshot(snapshotId) { const { data, error } = await supabase.rpc("restore_post_snapshot", { snapshot_id: snapshotId }); fail(error); return data; }
+export async function togglePostLike(postId, liked) { const result = liked ? await supabase.from("post_likes").delete().eq("post_id", postId).eq("user_id", cloud.user.id) : await supabase.from("post_likes").insert({ post_id: postId, user_id: cloud.user.id }); fail(result.error); }
+export async function fetchFavoriteFolders() { const { data, error } = await supabase.from("favorite_folders").select("*").eq("user_id", cloud.user.id).order("is_default", { ascending: false }).order("created_at"); fail(error); return data || []; }
+export async function createFavoriteFolder(name) { const { data, error } = await supabase.from("favorite_folders").insert({ user_id: cloud.user.id, name: String(name).trim().slice(0,30) }).select().single(); fail(error); return data; }
+export async function renameFavoriteFolder(id, name) { const { data, error } = await supabase.from("favorite_folders").update({ name: String(name).trim().slice(0,30), updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", cloud.user.id).select().maybeSingle(); fail(error); return data; }
+export async function deleteFavoriteFolder(id) { const { error } = await supabase.from("favorite_folders").delete().eq("id", id).eq("user_id", cloud.user.id).eq("is_default", false); fail(error); }
+export async function favoritePost(postId, folderId = null) { const { data, error } = await supabase.rpc("favorite_post", { target_post: postId, target_folder: folderId || null }); fail(error); return data; }
+export async function unfavoritePost(postId) { const { error } = await supabase.from("post_favorites").delete().eq("post_id", postId).eq("user_id", cloud.user.id); fail(error); }
+export async function followUser(targetId) { const { error } = await supabase.from("user_follows").insert({ follower_id: cloud.user.id, following_id: targetId }); fail(error); }
+export async function unfollowUser(targetId) { const { error } = await supabase.from("user_follows").delete().eq("follower_id", cloud.user.id).eq("following_id", targetId); fail(error); }
+export async function isFollowingUser(targetId) { if (!cloud.user || cloud.user.id === targetId) return false; const { data, error } = await supabase.from("user_follows").select("following_id").eq("follower_id", cloud.user.id).eq("following_id", targetId).maybeSingle(); fail(error); return !!data; }
+export async function fetchUserAchievements(targetId) { const { data, error } = await supabase.rpc("get_user_achievements", { target_user: targetId }); fail(error); return data || []; }
+export async function fetchLuckLeaderboard(period = "week") { const { data, error } = await supabase.rpc("get_luck_leaderboard", { period_name: period }); fail(error); return data || []; }
+export async function fetchCommentPostId(commentId) { const { data, error } = await supabase.from("post_comments").select("post_id").eq("id", commentId).maybeSingle(); fail(error); return data?.post_id || ""; }
 
 export async function fetchVault() {
   const [{ data: sections, error: se }, { data: templates, error: te }, { data: snapshots, error: ve }] = await Promise.all([

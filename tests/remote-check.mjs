@@ -76,29 +76,63 @@ try {
   assert.equal(staffPosts.length, 2); ok("public/private post RLS");
   stage("post-rls-passed");
 
-  noError(await two.client.from("post_comments").insert({ post_id: publicPost.id, user_id: two.id, content: "公开文章评论回归" }), "comment on public post");
+  const publicComment = noError(await two.client.from("post_comments").insert({ post_id: publicPost.id, user_id: two.id, content: "公开文章评论回归" }).select().single(), "comment on public post");
   await expectError(two.client.from("post_comments").insert({ post_id: privatePost.id, user_id: two.id, content: "不应写入的私有评论" }), "private post rejects comments");
   const parentDiscussion = noError(await one.client.from("station_comments").insert({ user_id: one.id, kind: "academic", content: "讨论区父级内容" }).select().single(), "create discussion");
   const replyDiscussion = noError(await two.client.from("station_comments").insert({ user_id: two.id, kind: "academic", content: `@${oneHandle} 讨论区回复通知`, reply_to: parentDiscussion.id }).select().single(), "reply and mention");
-  let mentions = noError(await one.client.rpc("get_mention_notifications", { limit_count: 30 }), "read own mention notifications");
-  assert(mentions.some(v => v.discussion_id === replyDiscussion.id && v.actor_id === two.id && !v.is_read));
-  noError(await one.client.rpc("mark_mention_notifications_read"), "mark mention notifications read");
-  mentions = noError(await one.client.rpc("get_mention_notifications", { limit_count: 30 }), "refresh mention notifications");
-  assert(mentions.some(v => v.discussion_id === replyDiscussion.id && v.is_read));
+  let notifications = noError(await one.client.rpc("get_notifications", { limit_count: 100 }), "read discussion reply notification");
+  assert(notifications.some(v => v.type === "discussion_reply" && v.source_id === replyDiscussion.id && v.actor_id === two.id && !v.is_read));
+  noError(await one.client.rpc("mark_notifications_read"), "mark discussion notification read");
   noError(await two.client.from("station_comments").delete().eq("id", replyDiscussion.id), "author deletes discussion");
   const removedDiscussion = noError(await visitor.from("station_comments").select("id").eq("id", replyDiscussion.id), "verify discussion deletion");
   assert.equal(removedDiscussion.length, 0); ok("discussion reply, mention and author deletion");
   stage("discussion-notifications-passed");
 
   const initialAutosave = noError(await one.client.rpc("get_blog_autosave_minutes"), "read blog autosave setting");
-  assert([5, 10, 30].includes(Number(initialAutosave)));
-  noError(await one.client.rpc("set_blog_autosave_minutes", { p_minutes: 5 }), "set blog autosave interval");
-  assert.equal(Number(noError(await one.client.rpc("get_blog_autosave_minutes"), "verify blog autosave interval")), 5);
-  noError(await one.client.rpc("set_blog_autosave_minutes", { p_minutes: 10 }), "restore blog autosave interval"); ok("synced blog autosave setting");
+  assert([0, 30].includes(Number(initialAutosave)));
+  noError(await one.client.rpc("set_blog_autosave_minutes", { p_minutes: 0 }), "disable blog autosave");
+  assert.equal(Number(noError(await one.client.rpc("get_blog_autosave_minutes"), "verify disabled blog autosave")), 0);
+  noError(await one.client.rpc("set_blog_autosave_minutes", { p_minutes: 30 }), "enable 30-minute blog autosave"); ok("synced blog autosave toggle");
+
+  let snapshots = noError(await one.client.from("post_snapshots").select("id,title,content").eq("post_id", publicPost.id).order("created_at", { ascending: false }), "read initial blog snapshots");
+  assert(snapshots.length >= 1);
+  noError(await one.client.from("posts").update({ content: "updated snapshot regression", updated_at: new Date().toISOString() }).eq("id", publicPost.id).eq("user_id", one.id), "update post for snapshot");
+  snapshots = noError(await one.client.from("post_snapshots").select("id,title,content").eq("post_id", publicPost.id).order("created_at", { ascending: false }), "read updated blog snapshots");
+  assert(snapshots.length >= 2);
+  noError(await one.client.rpc("restore_post_snapshot", { snapshot_id: snapshots.at(-1).id }), "restore blog snapshot"); ok("blog snapshot history and restore");
+
+  noError(await two.client.from("post_likes").insert({ post_id: publicPost.id, user_id: two.id }), "like public post");
+  let engagement = noError(await visitor.from("post_engagement").select("like_count,favorite_count").eq("post_id", publicPost.id).single(), "read public post engagement");
+  assert.equal(engagement.like_count, 1);
+  const folders = noError(await two.client.from("favorite_folders").select("id,is_default").eq("user_id", two.id), "read favorite folders");
+  assert(folders.some(v => v.is_default));
+  noError(await two.client.rpc("favorite_post", { target_post: publicPost.id, target_folder: null }), "favorite public post");
+  engagement = noError(await visitor.from("post_engagement").select("like_count,favorite_count").eq("post_id", publicPost.id).single(), "refresh public post engagement");
+  assert.equal(engagement.favorite_count, 1); ok("post likes and favorite folders");
+
+  noError(await two.client.from("user_follows").insert({ follower_id: two.id, following_id: one.id }), "follow another user");
+  notifications = noError(await one.client.rpc("get_notifications", { limit_count: 100 }), "read unified notifications");
+  assert(notifications.some(v => v.type === "post_comment" && v.source_id === publicComment.id));
+  assert(notifications.some(v => v.type === "follow" && v.actor_id === two.id));
+  noError(await one.client.rpc("mark_notifications_read"), "mark unified notifications read");
+  notifications = noError(await one.client.rpc("get_notifications", { limit_count: 100 }), "refresh unified notifications");
+  assert(notifications.every(v => v.is_read));
+  const profileSocial = noError(await visitor.from("public_profile_stats").select("follower_count,following_count").eq("id", one.id).single(), "read public social counts");
+  assert.equal(profileSocial.follower_count, 1); ok("follow graph and categorized notifications");
+
+  const achievements = noError(await visitor.rpc("get_user_achievements", { target_user: one.id }), "read public achievements");
+  assert(achievements.some(v => v.code === "posts_1") && achievements.some(v => v.code === "discussions_1")); ok("achievement badges");
 
   const firstCheckin = noError(await one.client.rpc("daily_checkin"), "first daily check-in");
   const secondCheckin = noError(await one.client.rpc("daily_checkin"), "second daily check-in");
-  assert.equal(firstCheckin.number, secondCheckin.number); assert.equal(firstCheckin.draw_count, 3); ok("three-draw idempotent daily check-in");
+  assert.equal(firstCheckin.number, secondCheckin.number); assert.equal(firstCheckin.draw_count, 10); ok("ten-draw idempotent daily check-in");
+
+  const weekLuck = noError(await visitor.rpc("get_luck_leaderboard", { period_name: "week" }), "read weekly luck leaderboard");
+  const historyLuck = noError(await visitor.rpc("get_luck_leaderboard", { period_name: "history" }), "read historical luck leaderboard");
+  assert(weekLuck.some(v => v.user_id === one.id && v.number === firstCheckin.number));
+  assert(historyLuck.some(v => v.user_id === one.id && v.number === firstCheckin.number));
+  const chromatic = await databaseQuery("select * from private.rate_checkin(111101);");
+  assert.equal(chromatic[0].rarity, "chromatic"); ok("weekly/history luck ranking and chromatic rarity");
 
   const moderationCount = await databaseQuery("select count(*)::integer as count, count(distinct category)::integer as categories from private.sensitive_terms;");
   assert(moderationCount[0].count >= 400 && moderationCount[0].categories >= 8); ok("expanded strict moderation dictionary");
@@ -114,7 +148,9 @@ try {
   assert.equal(pending.id, requestId);
   noError(await admin.client.rpc("review_avatar_request", { request_id: requestId, is_approved: true, note: "" }), "admin approves avatar");
   const publicProfile = noError(await visitor.from("public_profile_stats").select("avatar_url").eq("id", one.id).single(), "public profile after avatar approval");
-  assert.equal(publicProfile.avatar_url, avatarUrl); ok("avatar approval workflow");
+  assert.equal(publicProfile.avatar_url, avatarUrl);
+  notifications = noError(await one.client.rpc("get_notifications", { limit_count: 100 }), "read avatar system notification");
+  assert(notifications.some(v => v.type === "system" && v.source_id === requestId)); ok("avatar approval workflow and system notification");
 
   await expectError(admin.client.rpc("owner_list_banned_users", { limit_count: 100 }), "admin cannot read owner ban list");
   await expectError(admin.client.rpc("admin_ban_user", { target_id: owner.id, reason: "越权测试" }), "admin cannot ban owner");
