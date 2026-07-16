@@ -4,7 +4,7 @@ const platformMeta = {
 };
 
 let gameModulePromise;
-const loadGameModule = () => gameModulePromise ||= Promise.all([import("./training-game-map.js"), import("lucide")]);
+const loadGameModule = () => gameModulePromise ||= Promise.all([import("./training-game-map.js"), import("./training-game-icons.js")]);
 
 export function createTrainingWorld({ api, $, $$, esc, toast, nowText, openModal, avatarHtml }) {
   const state = { dashboard: null, targetId: "", own: false, activeMap: "", heatmap: [], heatmapTarget: "", reports: [], recommendations: [], game: null, selectedRegion: null, initialized: false };
@@ -103,13 +103,15 @@ export function createTrainingWorld({ api, $, $$, esc, toast, nowText, openModal
   async function renderGameMap(data) {
     const shell = $("#trainingGameShell"), stage = $("#trainingGameStage"), labels = $("#trainingGameLabels");
     if (!shell || !stage || !labels) return;
+    if(data.game_map_enabled===false){$("#trainingDashboard").classList.add('game-map-fallback');return;}
     try {
-      const [{ createTrainingGameMap }, lucide] = await loadGameModule();
-      lucide.createIcons({ icons: lucide.icons });
+      const [{ createTrainingGameMap }, { renderTrainingGameIcons }] = await loadGameModule();
+      renderTrainingGameIcons();
       state.game?.destroy?.();state.game = await createTrainingGameMap({
         host: stage,labelLayer: labels,dashboard: data,recommendations: state.recommendations,own: state.own,activeMap: state.activeMap,
         onMapChange: (code,map) => { state.activeMap=code;renderGameMapHeader(map);renderRegions(map);renderRadar(data.maps||[]); },
         onRegionSelect: openRegionDrawer,
+        onGuardianSelect: openGuardianDrawer,
         onLockedMap: map => toast(`${map?.name||'这张地图'}仍被迷雾封锁。完成前置核心据点，或达到能力直达门槛后永久开启。`),
         onStateChange: persistGameState
       });
@@ -153,8 +155,18 @@ export function createTrainingWorld({ api, $, $$, esc, toast, nowText, openModal
   }
 
   function closeRegionDrawer(){const drawer=$("#trainingRegionDrawer");drawer?.classList.remove('open');drawer?.setAttribute('aria-hidden','true');}
+  async function openGuardianDrawer(map){
+    if(!state.own){toast('守门人挑战只对探险家本人可见');return;}closeRegionDrawer();
+    const drawer=$("#trainingGuardianDrawer");drawer.classList.add('open');drawer.setAttribute('aria-hidden','false');$("#trainingGuardianTitle").textContent=`${map.name}守门人`;
+    $("#trainingGuardianProblem").textContent='正在召唤守门人……';$("#trainingGuardianReason").textContent='读取可靠标签与难度证据。';
+    try{const challenge=await api.fetchGuardianChallenge(map.code);const problem=challenge?.problem;if(!problem){$("#trainingGuardianStatus").textContent='当前没有足够可靠、尚未 AC 的综合题目。';$("#trainingGuardianProblem").textContent='挑战筹备中';$("#trainingGuardianReason").textContent='系统不会为凑数生成虚假挑战，题库条件满足后会自动出现。';$("#trainingGuardianLink").classList.add('hidden');$("#trainingGuardianReroll").classList.add('hidden');return;}
+      $("#trainingGuardianStatus").textContent=challenge.completed_at?'守门人挑战已完成，徽记永久保留。':'完成后获得守门人徽记，不影响主线地图解锁。';$("#trainingGuardianProblem").textContent=problem.title;$("#trainingGuardianReason").textContent=`${platformMeta[problem.platform]?.name||problem.platform} · 难度 ${problem.difficulty??'未知'} · 只根据同步后的 AC 判断完成。`;
+      const link=$("#trainingGuardianLink");link.href=problem.url;link.textContent=challenge.completed_at?'查看挑战':'前往挑战';link.classList.remove('hidden');const reroll=$("#trainingGuardianReroll");reroll.classList.toggle('hidden',Boolean(challenge.completed_at));reroll.onclick=async()=>{reroll.disabled=true;try{await api.rerollGuardianChallenge(map.code);toast('守门人挑战已更换');await openGuardianDrawer(map);}catch(error){toast(error.message,'error');}finally{reroll.disabled=false;}};
+    }catch(error){$("#trainingGuardianProblem").textContent='挑战暂时不可用';$("#trainingGuardianReason").textContent=error.message;}
+  }
+  function closeGuardianDrawer(){const drawer=$("#trainingGuardianDrawer");drawer?.classList.remove('open');drawer?.setAttribute('aria-hidden','true');}
   async function persistGameState(change){if(!state.own)return;try{const saved=await api.updateTrainingGameState(change);state.dashboard.game_state={...(state.dashboard.game_state||{}),...saved};}catch(error){console.warn('Unable to persist game state',error);}}
-  function syncSoundButton(){const button=$("#trainingMapSound");if(!button||!state.game)return;button.setAttribute('aria-pressed',String(state.game.audioEnabled));button.title=state.game.audioEnabled?'关闭音效':'开启音效';button.innerHTML=`<i data-lucide="${state.game.audioEnabled?'volume-2':'volume-x'}"></i>`;loadGameModule().then(([,lucide])=>lucide.createIcons({icons:lucide.icons}));}
+  function syncSoundButton(){const button=$("#trainingMapSound");if(!button||!state.game)return;button.setAttribute('aria-pressed',String(state.game.audioEnabled));button.title=state.game.audioEnabled?'关闭音效':'开启音效';button.innerHTML=`<i data-lucide="${state.game.audioEnabled?'volume-2':'volume-x'}"></i>`;loadGameModule().then(([,icons])=>icons.renderTrainingGameIcons(button));}
 
   function renderRadar(maps) {
     const map = maps.find(item => item.code === state.activeMap);const regions = (map?.regions || []).filter(region => region.core).slice(0, 6);
@@ -283,12 +295,13 @@ export function createTrainingWorld({ api, $, $$, esc, toast, nowText, openModal
     $("#trainingShareBtn").onclick=async()=>{const url=`${location.origin}${location.pathname}#training-world/${encodeURIComponent(state.targetId||api.cloud.user?.id||'')}`;try{await navigator.clipboard.writeText(url);toast("分享链接已复制");}catch{prompt("复制分享链接：",url);}};
     $("#trainingHeatmapRange").onchange=loadHeatmap;$("#trainingHeatmapPlatform").onchange=loadHeatmap;
     $("#trainingRerollBtn").onclick=async()=>{if(!state.own)return;try{await api.requestTrainingSync();toast("同步完成后会重新评估今日路线");}catch(error){toast(error.message,"error");}};
-    $("#trainingMapWorldBtn").onclick=()=>{closeRegionDrawer();state.game?.showWorld(true);renderGameMapHeader();};
+    $("#trainingMapWorldBtn").onclick=()=>{closeRegionDrawer();closeGuardianDrawer();state.game?.showWorld(true);renderGameMapHeader();};
     $("#trainingMapZoomIn").onclick=()=>state.game?.zoomBy(1.22);$("#trainingMapZoomOut").onclick=()=>state.game?.zoomBy(.82);$("#trainingMapReset").onclick=()=>state.game?.resetCamera();
     $("#trainingMapFullscreen").onclick=()=>state.game?.toggleFullscreen();$("#trainingMapSound").onclick=()=>{state.game?.setAudio(!state.game.audioEnabled);syncSoundButton();toast(state.game?.audioEnabled?'地图音效已开启':'地图音效已关闭');};
     $("#trainingRegionDrawerClose").onclick=closeRegionDrawer;
+    $("#trainingGuardianClose").onclick=closeGuardianDrawer;
     $("#trainingGameStage").addEventListener('training-map-mode',event=>{renderGameMapHeader();if(event.detail.mode==='world')closeRegionDrawer();});
-    $("#trainingGameShell").addEventListener('keydown',event=>{if(event.key==='Escape')closeRegionDrawer();if(event.key==='+'||event.key==='=')state.game?.zoomBy(1.15);if(event.key==='-')state.game?.zoomBy(.87);if(event.key==='Home')state.game?.resetCamera();});
+    $("#trainingGameShell").addEventListener('keydown',event=>{if(event.key==='Escape'){closeRegionDrawer();closeGuardianDrawer();}if(event.key==='+'||event.key==='=')state.game?.zoomBy(1.15);if(event.key==='-')state.game?.zoomBy(.87);if(event.key==='Home')state.game?.resetCamera();});
     $("#trainingPrivacyForm").onsubmit=async event=>{event.preventDefault();try{await api.updateTrainingPrivacy({accounts:$("#privacyAccountsPublic").checked,heatmap:$("#privacyHeatmapPublic").checked,map:$("#privacyMapPublic").checked,recent:$("#privacyRecentPublic").checked});toast("算法画像隐私设置已保存");await renderSettings();}catch(error){toast(error.message,"error");}};
   }
 

@@ -12,7 +12,11 @@ const frontend = read("training-world.js");
 const phase2a = read("supabase/migrations/202607160010_phase2_security_frames_luogu.sql");
 const phase2b = read("supabase/migrations/202607160011_phase2_regions_ability_unlocks.sql");
 const phase2c = read("supabase/migrations/202607160012_phase2_monthly_learning_reports.sql");
+const phase3 = read("supabase/migrations/202607160013_training_game_map.sql");
 const disabledLuogu = read("supabase/functions/_disabled/training-luogu-provider.ts");
+const gameMap = read("training-game-map.js");
+const gameScenes = read("training-map-scenes.js");
+const gameCss = read("training-game-map.css");
 
 assert.equal((schema.match(/^\('(?:plains|bronze|silver|gold|platinum|master|legend)'/gm) || []).length, 7, "seven map definitions required");
 for (const map of ["plains","bronze","silver","gold","platinum","master","legend"]) assert(schema.includes(`'${map}'`), `missing map ${map}`);
@@ -40,5 +44,19 @@ for (const frame of ["expedition_bronze","laurel_streak","ink_author","community
 assert.match(phase2c, /unique\(user_id,report_month\)/); assert.match(phase2c, /Asia\/Shanghai/); assert.match(phase2c, /extract\(day from \(now\(\) at time zone 'Asia\/Shanghai'\)\).*<>2/);
 assert.match(phase2c, /monthly_learning_reports_own_read/); assert.match(phase2c, /20 16 \* \* \*/);
 assert.match(phase2c, /monthly_skill_snapshots_client_deny/); assert.match(phase2c, /'mastery_delta'/);
+assert.match(phase3, /create table if not exists public\.training_game_state/);
+assert.match(phase3, /create table if not exists public\.guardian_challenges/);
+assert.match(phase3, /private\.complete_training_game_events/);
+assert.match(phase3, /training_game_state_own_read/);
+assert.match(gameMap, /from "pixi\.js"/);
+assert.match(gameMap, /travelTo\(item, region, quest\)/);
+assert.match(gameMap, /playUnlock\(event/);
+assert.match(gameScenes, /ALL_REGION_CODES/);
+assert.match(gameScenes, /!== 41/);
+assert.match(gameScenes, /route graph is disconnected/);
+assert.match(gameCss, /\.game-region-drawer/);
+assert.match(gameCss, /\.map-unlock-cinematic/);
+assert.match(gameCss, /prefers-reduced-motion:reduce/);
+assert.match(gameCss, /\.game-map-fallback/);
 
-console.log("Algorithm Expedition checks passed: maps, scoring, privacy, adapters, queue and UI contracts.");
+console.log("Algorithm Expedition checks passed: maps, scoring, privacy, adapters, queue, game scenes and UI contracts.");

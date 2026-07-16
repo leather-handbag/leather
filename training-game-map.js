@@ -15,7 +15,7 @@ export async function createTrainingGameMap(options) {
 }
 
 class TrainingGameMap {
-  constructor({ host, labelLayer, dashboard, recommendations = [], own = true, activeMap = "plains", onMapChange, onRegionSelect, onLockedMap, onStateChange }) {
+  constructor({ host, labelLayer, dashboard, recommendations = [], own = true, activeMap = "plains", onMapChange, onRegionSelect, onGuardianSelect, onLockedMap, onStateChange }) {
     this.host = host;
     this.labelLayer = labelLayer;
     this.dashboard = dashboard;
@@ -24,6 +24,7 @@ class TrainingGameMap {
     this.activeMap = activeMap;
     this.onMapChange = onMapChange;
     this.onRegionSelect = onRegionSelect;
+    this.onGuardianSelect = onGuardianSelect;
     this.onLockedMap = onLockedMap;
     this.onStateChange = onStateChange;
     this.mode = "world";
@@ -250,7 +251,7 @@ class TrainingGameMap {
     g.circle(scene.portal.x, scene.portal.y, 34).fill({ color: map.mastered ? scene.palette.accent : scene.palette.shadow, alpha: .32 });
     g.rect(scene.portal.x - 64, scene.portal.y + 48, 128, 20).fill({ color: scene.palette.shadow, alpha: .85 });
     this.world.addChild(g);
-    this.createLabel({ x: scene.portal.x, y: scene.portal.y + 92, title: map.mastered ? "通往下一域的传送门" : "地图守门关", meta: map.mastered ? "传送门已稳定" : "核心据点全部点亮后开启", state: map.mastered ? "mastered" : "locked", onClick: () => map.mastered ? this.showWorld(true) : this.onLockedMap?.(map) });
+    this.createLabel({ x: scene.portal.x, y: scene.portal.y + 92, title: map.mastered ? "守门人传送门" : "地图守门关", meta: map.mastered ? "可选综合挑战已经开放" : "核心据点全部点亮后开启", state: map.mastered ? "mastered" : "locked", onClick: () => map.mastered ? this.onGuardianSelect?.(map) : this.onLockedMap?.(map) });
   }
 
   drawCampfire(scene) {
