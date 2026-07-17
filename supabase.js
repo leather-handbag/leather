@@ -23,6 +23,8 @@ export function supabaseErrorText(error) {
   if (/invalid login credentials/i.test(message)) return "邮箱或密码不正确";
   if (/email not confirmed/i.test(message)) return "请先打开验证邮件完成邮箱确认";
   if (/user already registered/i.test(message)) return "这个邮箱已经注册";
+  if (/token has expired|otp.*expired/i.test(message)) return "验证码已过期，请重新发送";
+  if (/token.*invalid|invalid.*otp/i.test(message)) return "验证码不正确，请检查后重试";
   if (/captcha|challenge/i.test(message)) return "请完成人机验证后重试";
   if (/rate limit/i.test(message)) return "操作过于频繁，请稍后重试";
   if (/row-level security|permission denied/i.test(message)) return "没有执行此操作的权限";

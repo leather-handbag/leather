@@ -39,15 +39,21 @@ export async function emailLogin(email, password, captchaToken) {
   const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } }); fail(error);
 }
 export async function emailSignup(email, password, captchaToken) {
-  const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl(), captchaToken } }); fail(error); return data;
+  const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl(), captchaToken } }); fail(error);
+  if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) throw new Error("这个邮箱已经注册");
+  return data;
 }
+export async function verifySignupCode(email, token) {
+  const { data, error } = await supabase.auth.verifyOtp({ email, token: String(token || "").trim(), type: "signup" }); fail(error); return data;
+}
+export async function resendSignupCode(email, captchaToken) { const { data, error } = await supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: redirectUrl(), captchaToken } }); fail(error); return data; }
 export async function githubLogin() {
   const { error } = await supabase.auth.signInWithOAuth({ provider: "github", options: { redirectTo: redirectUrl(), scopes: "read:user user:email" } }); fail(error);
 }
 export async function sendPasswordReset(email, captchaToken) {
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${redirectUrl()}#account`, captchaToken }); fail(error);
 }
-export async function updatePassword(password) { const { error } = await supabase.auth.updateUser({ password }); fail(error); }
+export async function updatePassword(password) { const { data, error } = await supabase.auth.updateUser({ password, data: { leather_password_set: true } }); fail(error); if (data?.user) cloud.user = data.user; return data; }
 export async function signOut() { const { error } = await supabase.auth.signOut(); fail(error); }
 
 export async function updateProfile(value) {

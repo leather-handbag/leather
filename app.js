@@ -1069,6 +1069,8 @@ setInterval(() => { if (api.cloud.user) refreshNotifications(); }, 60000);
 // Supabase account, profile, check-in, ranking and moderation UI
 let authMode = "login", avatarFile = null, leaderboardTimer = 0, adminUsersCache = [];
 let authCaptchaToken = "", authCaptchaWidget = null;
+const pendingSignupStorageKey = "leather-pending-signup-email-v1";
+let pendingSignupEmail = sessionStorage.getItem(pendingSignupStorageKey) || "";
 const hasWriteAccess = () => !!(api.cloud.user && api.cloud.profile && !api.cloud.profile.banned_at);
 const isStaff = () => ["admin", "owner"].includes(api.cloud.profile?.role);
 const chinaDateText = value => new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(value ? new Date(`${value}T00:00:00+08:00`) : new Date());
@@ -1198,7 +1200,44 @@ function renderAccount() {
   trainingWorld.refreshAccountSummary();
 }
 
+function showSignupVerification(email = "") {
+  pendingSignupEmail = String(email || "").trim();
+  if (pendingSignupEmail) sessionStorage.setItem(pendingSignupStorageKey, pendingSignupEmail);
+  else sessionStorage.removeItem(pendingSignupStorageKey);
+  const active = !!pendingSignupEmail;
+  $("#authGuestPanel").querySelector(".auth-tabs").classList.toggle("hidden", active);
+  $("#emailAuthForm").classList.toggle("hidden", active);
+  $("#authAlternativeActions").classList.toggle("hidden", active);
+  $("#signupVerificationForm").classList.toggle("hidden", !active);
+  $("#signupVerificationEmail").textContent = pendingSignupEmail;
+  $("#signupVerificationError").textContent = "";
+  if (active) setTimeout(() => $("#signupVerificationCode").focus(), 0);
+}
+
+function githubIdentityNeedsPassword(user) {
+  if (!user || user.user_metadata?.leather_password_set === true) return false;
+  const providers = new Set([...(user.identities || []).map(item => item?.provider), ...(user.app_metadata?.providers || [])]);
+  return providers.has("github");
+}
+
+function closeGithubPasswordPrompt(dismiss = false) {
+  const dialog = $("#githubPasswordDialog"), user = api.cloud.user;
+  if (dismiss && user?.id) sessionStorage.setItem(`leather-github-password-dismissed:${user.id}`, "1");
+  if (dialog.open && typeof dialog.close === "function") dialog.close(); else dialog.removeAttribute("open");
+  $("#githubPasswordPromptForm").reset(); $("#githubPasswordError").textContent = "";
+}
+
+function maybePromptGithubPassword() {
+  const user = api.cloud.user, dialog = $("#githubPasswordDialog");
+  if (!githubIdentityNeedsPassword(user) || sessionStorage.getItem(`leather-github-password-dismissed:${user.id}`)) return;
+  $("#githubBoundEmail").textContent = user.email || "GitHub 验证邮箱";
+  if (!dialog.open) {
+    if (typeof dialog.showModal === "function") dialog.showModal(); else dialog.setAttribute("open", "");
+  }
+}
+
 $$('[data-auth-tab]').forEach(button => button.onclick = () => {
+  showSignupVerification("");
   authMode = button.dataset.authTab; $$('[data-auth-tab]').forEach(v => v.classList.toggle("active", v === button));
   $("#authConfirmLabel").classList.toggle("hidden", authMode !== "signup"); $("#authPasswordConfirm").required = authMode === "signup";
   $("#emailAuthSubmit").textContent = authMode === "signup" ? "创建账号" : "登录"; $("#authError").textContent = ""; resetAuthCaptcha();
@@ -1209,10 +1248,25 @@ $("#emailAuthForm").onsubmit = async e => {
   if (password.length < 8) { $("#authError").textContent = "密码至少 8 位"; return; }
   if (authMode === "signup" && password !== $("#authPasswordConfirm").value) { $("#authError").textContent = "两次密码不一致"; return; }
   let usedCaptcha = false; $("#emailAuthSubmit").disabled = true;
-  try { const captchaToken = requireAuthCaptcha(); usedCaptcha = !!captchaToken; if (authMode === "signup") { const data = await api.emailSignup(email, password, captchaToken); toast(data.session ? "注册并登录成功" : "验证邮件已发送，请完成邮箱验证"); } else await api.emailLogin(email, password, captchaToken); }
+  try { const captchaToken = requireAuthCaptcha(); usedCaptcha = !!captchaToken; if (authMode === "signup") { const data = await api.emailSignup(email, password, captchaToken); if (data.session) { showSignupVerification(""); toast("注册并登录成功"); } else { showSignupVerification(email); toast("验证码已发送，请查看邮箱"); } } else await api.emailLogin(email, password, captchaToken); }
   catch (error) { $("#authError").textContent = error.message; }
   finally { if (usedCaptcha) resetAuthCaptcha(); $("#emailAuthSubmit").disabled = false; }
 };
+$("#signupVerificationForm").onsubmit = async e => {
+  e.preventDefault(); const code = $("#signupVerificationCode").value.trim(); $("#signupVerificationError").textContent = "";
+  if (!/^\d{6,8}$/.test(code)) { $("#signupVerificationError").textContent = "请输入邮件中的验证码"; return; }
+  $("#verifySignupCodeBtn").disabled = true;
+  try { await api.verifySignupCode(pendingSignupEmail, code); showSignupVerification(""); toast("邮箱验证成功，已登录"); }
+  catch (error) { $("#signupVerificationError").textContent = error.message; }
+  finally { $("#verifySignupCodeBtn").disabled = false; }
+};
+$("#resendSignupCodeBtn").onclick = async () => {
+  const button = $("#resendSignupCodeBtn"); button.disabled = true; $("#signupVerificationError").textContent = "";
+  try { await api.resendSignupCode(pendingSignupEmail); toast("新的验证码已发送"); }
+  catch (error) { $("#signupVerificationError").textContent = error.message; }
+  finally { setTimeout(() => { button.disabled = false; }, 60000); }
+};
+$("#backToSignupBtn").onclick = () => { showSignupVerification(""); authMode = "signup"; $$('[data-auth-tab]').forEach(v => v.classList.toggle("active", v.dataset.authTab === "signup")); $("#authConfirmLabel").classList.remove("hidden"); $("#authPasswordConfirm").required = true; $("#emailAuthSubmit").textContent = "创建账号"; resetAuthCaptcha(); };
 $("#githubAuthBtn").onclick = async () => { if (!api.cloud.configured) { toast("请先配置 Supabase", "error"); return; } try { await api.githubLogin(); } catch (error) { toast(error.message, "error"); } };
 $("#resetPasswordBtn").onclick = async () => { const email = $("#authEmail").value.trim(); if (!email) { $("#authError").textContent = "请先填写邮箱"; return; } let usedCaptcha = false; try { const captchaToken = requireAuthCaptcha(); usedCaptcha = !!captchaToken; await api.sendPasswordReset(email, captchaToken); toast("密码重置邮件已发送"); } catch (error) { $("#authError").textContent = error.message; } finally { if (usedCaptcha) resetAuthCaptcha(); } };
 $("#signOutBtn").onclick = async () => { if (!confirmBlogDiscard() || !confirmDiscard()) return; try { await api.signOut(); location.hash = "home"; } catch (error) { toast(error.message, "error"); } };
@@ -1231,6 +1285,18 @@ $("#passwordForm").onsubmit = async e => {
   if (one.length < 8) { $("#passwordError").textContent = "密码至少 8 位"; return; } if (one !== two) { $("#passwordError").textContent = "两次密码不一致"; return; }
   try { await api.updatePassword(one); e.target.reset(); toast("密码已更新"); } catch (error) { $("#passwordError").textContent = error.message; }
 };
+$("#githubPasswordPromptForm").onsubmit = async e => {
+  e.preventDefault(); const one = $("#githubPassword").value, two = $("#githubPasswordConfirm").value; $("#githubPasswordError").textContent = "";
+  if (one.length < 8) { $("#githubPasswordError").textContent = "密码至少 8 位"; return; }
+  if (one !== two) { $("#githubPasswordError").textContent = "两次密码不一致"; return; }
+  $("#setGithubPasswordBtn").disabled = true;
+  try { await api.updatePassword(one); closeGithubPasswordPrompt(false); toast("邮箱密码已绑定，以后可使用两种方式登录"); }
+  catch (error) { $("#githubPasswordError").textContent = error.message; }
+  finally { $("#setGithubPasswordBtn").disabled = false; }
+};
+$("#dismissGithubPasswordBtn").onclick = () => closeGithubPasswordPrompt(true);
+$("#laterGithubPasswordBtn").onclick = () => closeGithubPasswordPrompt(true);
+showSignupVerification(pendingSignupEmail);
 $("#blogSettingsForm").onsubmit = async e => {
   e.preventDefault(); const enabled = $("#blogAutosaveEnabled").checked;
   try { blogStore.autosaveEnabled = api.cloud.configured ? await api.setBlogAutosaveMinutes(enabled) : enabled; if (!api.cloud.configured) localStorage.setItem("leather-blog-autosave-enabled-v1", String(enabled)); startBlogAutosave(); toast(enabled ? "已开启博客自动保存：每 30 分钟" : "已关闭博客自动保存"); }
@@ -1363,10 +1429,12 @@ $("#adminContentType").onchange = renderAdminContent; $("#refreshAdminBtn").oncl
 
 async function onCloudAuthChange(event) {
   if (api.cloud.user) {
+    showSignupVerification("");
     try { blogStore.autosaveEnabled = await api.fetchBlogAutosaveMinutes(); } catch { blogStore.autosaveEnabled = true; }
     try { await loadFavoriteFolders(); } catch { blogStore.folders=[]; }
-  } else { blogStore.notifications = []; blogStore.folders=[]; blogStore.selectedFolder=""; }
+  } else { blogStore.notifications = []; blogStore.folders=[]; blogStore.selectedFolder=""; closeGithubPasswordPrompt(false); }
   applyAuthState();
+  if (api.cloud.user) setTimeout(maybePromptGithubPassword, 0);
   await reloadCloudContent();
   await refreshNotifications();
   if (hasWriteAccess()) await Promise.all([loadCloudVault(), loadCloudPlan()]);

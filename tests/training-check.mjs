@@ -13,6 +13,8 @@ const phase2a = read("supabase/migrations/202607160010_phase2_security_frames_lu
 const phase2b = read("supabase/migrations/202607160011_phase2_regions_ability_unlocks.sql");
 const phase2c = read("supabase/migrations/202607160012_phase2_monthly_learning_reports.sql");
 const phase3 = read("supabase/migrations/202607160013_training_game_map.sql");
+const phase3Hardening = read("supabase/migrations/202607160014_training_game_map_hardening.sql");
+const activityFloor = read("supabase/migrations/202607170015_activity_score_floor.sql");
 const disabledLuogu = read("supabase/functions/_disabled/training-luogu-provider.ts");
 const gameMap = read("training-game-map.js");
 const gameScenes = read("training-map-scenes.js");
@@ -48,6 +50,8 @@ assert.match(phase3, /create table if not exists public\.training_game_state/);
 assert.match(phase3, /create table if not exists public\.guardian_challenges/);
 assert.match(phase3, /private\.complete_training_game_events/);
 assert.match(phase3, /training_game_state_own_read/);
+assert.match(phase3Hardening, /game_map_enabled/);
+assert.match(activityFloor, /greatest\(-30,q\.raw_score\)::integer as score/);
 assert.match(gameMap, /from "pixi\.js"/);
 assert.match(gameMap, /travelTo\(item, region, quest\)/);
 assert.match(gameMap, /playUnlock\(event/);

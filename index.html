@@ -400,9 +400,20 @@
               <p class="form-error" id="authError" role="alert"></p>
               <button class="btn primary wide" id="emailAuthSubmit" type="submit">登录</button>
             </form>
-            <button class="btn github-auth wide" id="githubAuthBtn" type="button"><span>GitHub</span> 使用 GitHub 授权</button>
-            <button class="text-btn auth-reset" id="resetPasswordBtn" type="button">忘记密码？发送重置邮件</button>
-            <small>注册即表示同意遵守内容规范。违规内容会由服务端自动删除并可能触发封禁。</small>
+            <form id="signupVerificationForm" class="auth-verification hidden">
+              <span class="auth-state-icon" aria-hidden="true">@</span>
+              <h2>输入邮箱验证码</h2>
+              <p>验证码已发送至 <b id="signupVerificationEmail"></b></p>
+              <label>6 位验证码<input id="signupVerificationCode" type="text" inputmode="numeric" autocomplete="one-time-code" minlength="6" maxlength="8" pattern="[0-9]{6,8}" required placeholder="000000"></label>
+              <p class="form-error" id="signupVerificationError" role="alert"></p>
+              <button class="btn primary wide" id="verifySignupCodeBtn" type="submit">验证并登录</button>
+              <div class="auth-verification-actions"><button class="text-btn" id="resendSignupCodeBtn" type="button">重新发送</button><button class="text-btn" id="backToSignupBtn" type="button">返回修改邮箱</button></div>
+            </form>
+            <div id="authAlternativeActions">
+              <button class="btn github-auth wide" id="githubAuthBtn" type="button"><span>GitHub</span> 使用 GitHub 授权</button>
+              <button class="text-btn auth-reset" id="resetPasswordBtn" type="button">忘记密码？发送重置邮件</button>
+              <small>注册即表示同意遵守内容规范。违规内容会由服务端自动删除并可能触发封禁。</small>
+            </div>
           </div>
         </div>
         <div id="accountProfilePanel" class="hidden">
@@ -410,6 +421,20 @@
           <div class="account-home-grid"><section class="settings-card profile-level-card"><h2>当前等级</h2><div id="accountLevelSummary"></div><div class="account-home-actions"><a class="btn ghost small" id="myPublicProfileBtn" href="#profile">查看公开主页</a><a class="btn ghost small" href="#training-world">进入算法远征</a></div></section><section class="settings-card account-training-card"><span class="eyebrow">ALGORITHM EXPEDITION</span><h2>远征摘要</h2><div id="accountTrainingSummary"><p>正在读取训练地图……</p></div></section><section class="settings-card"><span class="eyebrow">QUICK ACCESS</span><h2>常用入口</h2><div class="account-quick-links"><a href="#roadmap">任务导图 <span>→</span></a><a href="#blogs">我的博客 <span>→</span></a><a href="#favorites">我的收藏 <span>→</span></a><a href="#settings">隐私与账号 <span>→</span></a></div></section></div>
         </div>
       </section>
+
+      <dialog id="githubPasswordDialog" class="account-password-dialog" aria-labelledby="githubPasswordTitle">
+        <form id="githubPasswordPromptForm" method="dialog">
+          <button class="dialog-close" id="dismissGithubPasswordBtn" type="button" aria-label="稍后设置密码">×</button>
+          <span class="eyebrow">ACCOUNT RECOVERY</span>
+          <h2 id="githubPasswordTitle">为 GitHub 账号设置登录密码</h2>
+          <p>已绑定 GitHub 验证邮箱 <b id="githubBoundEmail"></b>。设置密码后，也可以直接使用该邮箱登录。</p>
+          <label>新密码<input id="githubPassword" type="password" minlength="8" maxlength="72" autocomplete="new-password" required placeholder="至少 8 位"></label>
+          <label>确认密码<input id="githubPasswordConfirm" type="password" minlength="8" maxlength="72" autocomplete="new-password" required placeholder="再次输入密码"></label>
+          <p class="form-error" id="githubPasswordError" role="alert"></p>
+          <button class="btn primary wide" id="setGithubPasswordBtn" type="submit">绑定邮箱密码</button>
+          <button class="text-btn auth-reset" id="laterGithubPasswordBtn" type="button">稍后在设置页完成</button>
+        </form>
+      </dialog>
 
       <section class="page" id="page-settings" data-title="设置">
         <div class="workspace-head"><div><span class="eyebrow">PROFILE & PRIVACY</span><h1>资料、安全与远征设置</h1><p>管理公开资料、竞赛平台绑定、隐私和账号安全。</p></div><button class="btn ghost" id="signOutBtn">退出登录</button></div>
