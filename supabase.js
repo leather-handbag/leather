@@ -20,6 +20,7 @@ export const supabase = supabaseConfigured
 
 export function supabaseErrorText(error) {
   const message = error?.message || String(error || "未知错误");
+  if (message === "{}") return "注册请求失败，请检查 Supabase Auth 日志";
   if (/invalid login credentials/i.test(message)) return "邮箱或密码不正确";
   if (/email not confirmed/i.test(message)) return "请先打开验证邮件完成邮箱确认";
   if (/user already registered/i.test(message)) return "这个邮箱已经注册";
