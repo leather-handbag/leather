@@ -1415,13 +1415,28 @@ function adminContentLink(table, item) {
   if (table === "posts") return item.id ? `#article/${encodeURIComponent(item.id)}` : "";
   if (table === "post_comments") return item.post_id ? `#article/${encodeURIComponent(item.post_id)}` : "";
   if (table === "station_comments") return "#discussion";
-  return item.user_id ? `#profile/${encodeURIComponent(item.user_id)}` : "";
+  return "";
+}
+function adminContentPreviewHtml(table, item) {
+  if (table === "plans") {
+    const levels = Array.isArray(item.data?.levels) ? item.data.levels : Array.isArray(item.data) ? item.data : [];
+    return `<div class="admin-content-preview"><p>更新时间：${esc(item.updated_at ? nowText(Date.parse(item.updated_at)) : "未知")}</p>${levels.length ? levels.map(level => `<section><h3>${esc(level.name || level.title || "未命名层级")}</h3><p>${esc(level.note || "")}</p><ul>${(level.tasks || []).map(task => `<li><b>${esc(task.title || "未命名任务")}</b><span>${esc(task.desc || task.due || "")}</span></li>`).join("") || "<li>暂无任务</li>"}</ul></section>`).join("") : `<pre>${esc(JSON.stringify(item.data || {}, null, 2))}</pre>`}</div>`;
+  }
+  if (table === "templates") {
+    return `<div class="admin-content-preview"><p>${esc(item.lang || "Other")} · ${(item.tags || []).map(tag => `#${esc(tag)}`).join(" ")}</p><h3>${esc(item.title || "未命名模板")}</h3><pre>${esc(item.code || "")}</pre></div>`;
+  }
+  return `<div class="admin-content-preview"><pre>${esc(JSON.stringify(item, null, 2))}</pre></div>`;
+}
+function openAdminContentPreview(table, item) {
+  const labels = { plans:"计划详情", templates:"模板详情" };
+  openModal({ title: labels[table] || "内容详情", html: adminContentPreviewHtml(table, item), confirm: "关闭" });
 }
 async function renderAdminContent() {
   const table = $("#adminContentType").value, labels = { posts:"博客", post_comments:"文章评论", station_comments:"讨论区", plans:"计划", templates:"模板" };
   try {
     const data = await api.fetchAdminContent(table);
-    $("#adminContentList").innerHTML = data.length ? data.map(item => { const owner = adminUsersCache.find(v => v.id === item.user_id), preview = item.title || item.content || item.code || JSON.stringify(item.data || ""); const canDelete = owner && owner.role !== "owner" && (api.cloud.profile.role === "owner" || owner.role === "user"), link = adminContentLink(table, item); return `<article class="admin-row"><div><span><b>${labels[table]} · ${esc(owner?.display_name || item.user_id)}</b><small>${esc(String(preview).slice(0,180))}</small></span></div><div class="admin-actions">${link ? `<a class="admin-open-content" href="${esc(link)}">查看</a>` : ""}${canDelete ? `<button class="admin-delete-content" data-id="${item.id}">删除</button>` : ""}</div></article>`; }).join("") : '<div class="empty-list">暂无内容</div>';
+    $("#adminContentList").innerHTML = data.length ? data.map(item => { const owner = adminUsersCache.find(v => v.id === item.user_id), preview = item.title || item.content || item.code || JSON.stringify(item.data || ""); const canDelete = owner && owner.role !== "owner" && (api.cloud.profile.role === "owner" || owner.role === "user"), link = adminContentLink(table, item); return `<article class="admin-row"><div><span><b>${labels[table]} · ${esc(owner?.display_name || item.user_id)}</b><small>${esc(String(preview).slice(0,180))}</small></span></div><div class="admin-actions">${link ? `<a class="admin-open-content" href="${esc(link)}">查看</a>` : `<button class="admin-open-content admin-preview-content" data-id="${item.id}" type="button">查看</button>`}${canDelete ? `<button class="admin-delete-content" data-id="${item.id}">删除</button>` : ""}</div></article>`; }).join("") : '<div class="empty-list">暂无内容</div>';
+    $$(".admin-preview-content", $("#adminContentList")).forEach(button => button.onclick = () => { const item = data.find(row => String(row.id) === String(button.dataset.id)); if (item) openAdminContentPreview(table, item); });
     $$(".admin-delete-content", $("#adminContentList")).forEach(button => button.onclick = async () => { if (!confirm("确定删除这条内容吗？该操作不可撤销。")) return; try { await api.deleteAdminContent(table, button.dataset.id); await renderAdminContent(); await reloadCloudContent(); toast("内容已删除"); } catch (error) { toast(error.message,"error"); } });
   } catch (error) { $("#adminContentList").innerHTML = `<div class="empty-list">${esc(error.message)}</div>`; }
 }
