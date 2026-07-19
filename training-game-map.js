@@ -103,13 +103,36 @@ class TrainingGameMap {
     bg.rect(0, 0, WORLD_SIZE.width, 420).fill({ color: 0x456d72, alpha: .75 });
     bg.rect(0, 420, WORLD_SIZE.width, 700).fill(0x345b55);
     this.world.addChild(bg);
+    this.drawMapTexture(WORLD_SIZE.width, WORLD_SIZE.height, 0xd9d2b0, "world");
     const contour = new Graphics();
     for (let i = 0; i < 24; i++) {
       const x = (i * 367) % WORLD_SIZE.width, y = 90 + (i * 173) % 900;
       contour.circle(x, y, 80 + (i % 4) * 28).stroke({ color: 0xd9d2b0, width: 2, alpha: .08 });
     }
     this.world.addChild(contour);
+    const compass = new Graphics().circle(142, 150, 58).stroke({ color: 0xf1e1ae, width: 3, alpha: .45 });
+    compass.moveTo(142, 76).lineTo(158, 150).lineTo(142, 224).lineTo(126, 150).closePath().fill({ color: 0xf1e1ae, alpha: .18 }).stroke({ color: 0xf1e1ae, width: 2, alpha: .55 });
+    compass.moveTo(68, 150).lineTo(216, 150).moveTo(142, 76).lineTo(142, 224).stroke({ color: 0xf1e1ae, width: 1, alpha: .25 });
+    this.world.addChild(compass);
     this.addParticles("world", 34);
+  }
+
+  drawMapTexture(width, height, color, type = "region") {
+    const texture = new Graphics();
+    for (let i = 0; i < 70; i++) {
+      const x = (i * 149) % width, y = (i * 211) % height, r = 16 + (i % 7) * 9;
+      texture.circle(x, y, r).fill({ color, alpha: type === "world" ? .028 : .035 });
+    }
+    for (let i = 0; i < 28; i++) {
+      const y = 40 + (i * 97) % Math.max(80, height - 80);
+      texture.moveTo(0, y).bezierCurveTo(width * .28, y - 30, width * .66, y + 42, width, y + (i % 2 ? -18 : 18))
+        .stroke({ color, width: 2 + i % 3, alpha: type === "world" ? .035 : .045 });
+    }
+    texture.rect(0, 0, width, 18).fill({ color: 0x0b1411, alpha: .18 });
+    texture.rect(0, height - 18, width, 18).fill({ color: 0x0b1411, alpha: .16 });
+    texture.rect(0, 0, 18, height).fill({ color: 0x0b1411, alpha: .14 });
+    texture.rect(width - 18, 0, 18, height).fill({ color: 0x0b1411, alpha: .14 });
+    this.world.addChild(texture);
   }
 
   drawWorldRealm(scene, index) {
@@ -201,6 +224,26 @@ class TrainingGameMap {
     }
     this.world.addChild(terrain);
     this.drawDecorations(scene);
+    this.drawMapTexture(scene.width, scene.height, scene.palette.accent, scene.climate);
+    this.drawWeatherLayer(scene);
+  }
+
+  drawWeatherLayer(scene) {
+    const layer = new Graphics();
+    if (scene.climate === "coast") {
+      for (let i = 0; i < 9; i++) layer.ellipse(120 + i * 170, 710 + (i % 2) * 34, 120, 18).stroke({ color: 0xffffff, width: 3, alpha: .25 });
+    } else if (scene.climate === "mountain") {
+      for (let i = 0; i < 36; i++) layer.circle((i * 137) % scene.width, 90 + (i * 83) % 470, 2 + i % 3).fill({ color: 0xffffff, alpha: .42 });
+    } else if (scene.climate === "desert") {
+      for (let i = 0; i < 10; i++) layer.moveTo(60 + i * 170, 390 + (i % 4) * 54).bezierCurveTo(190 + i * 150, 330, 260 + i * 130, 470, 440 + i * 120, 410).stroke({ color: 0xf7df9c, width: 8, alpha: .13 });
+    } else if (scene.climate === "space") {
+      for (let i = 0; i < 90; i++) layer.circle((i * 71) % scene.width, (i * 113) % scene.height, 1 + i % 2).fill({ color: i % 5 ? 0xffffff : scene.palette.accent, alpha: .42 });
+    } else if (scene.climate === "abyss") {
+      for (let i = 0; i < 18; i++) layer.rect(80 + i * 84, 130 + (i * 41) % 520, 5, 48 + i % 5 * 16).fill({ color: scene.palette.accent, alpha: .16 });
+    } else if (scene.climate === "sky") {
+      for (let i = 0; i < 12; i++) layer.ellipse(80 + i * 145, 150 + (i % 3) * 80, 130, 34).fill({ color: 0xffffff, alpha: .13 });
+    }
+    this.world.addChild(layer);
   }
 
   drawDecorations(scene) {
@@ -222,6 +265,8 @@ class TrainingGameMap {
       const a = scene.nodes.find(item => item.code === aCode), b = scene.nodes.find(item => item.code === bCode);
       const active = Number(stateMap.get(aCode)?.percent || 0) > 0 || Number(stateMap.get(bCode)?.percent || 0) > 0;
       route.moveTo(a.x, a.y).bezierCurveTo((a.x + b.x) / 2, Math.min(a.y, b.y) - 70, (a.x + b.x) / 2, Math.max(a.y, b.y) + 50, b.x, b.y)
+        .stroke({ color: 0x141611, width: active ? 18 : 12, alpha: active ? .24 : .18 });
+      route.moveTo(a.x, a.y).bezierCurveTo((a.x + b.x) / 2, Math.min(a.y, b.y) - 70, (a.x + b.x) / 2, Math.max(a.y, b.y) + 50, b.x, b.y)
         .stroke({ color: active ? scene.palette.accent : 0x5d5b50, width: active ? 12 : 7, alpha: active ? .66 : .38 });
       route.moveTo(a.x, a.y).bezierCurveTo((a.x + b.x) / 2, Math.min(a.y, b.y) - 70, (a.x + b.x) / 2, Math.max(a.y, b.y) + 50, b.x, b.y)
         .stroke({ color: active ? 0xfff3c4 : 0xb1aa93, width: 2, alpha: active ? .75 : .28 });
@@ -233,10 +278,13 @@ class TrainingGameMap {
     const region = (map.regions || []).find(value => value.code === item.code) || { code: item.code, name: item.landmark, percent: 0, core: true };
     const computed = this.nodeStateMap.get(item.code) || { state: map.unlocked ? "discovered" : "undiscovered", stars: 0, percent: Number(region.percent || 0) };
     const container = new Container();container.position.set(item.x, item.y);
-    const halo = new Graphics().circle(0, 0, 54).fill({ color: stateColor(computed.state, scene), alpha: computed.state === "mastered" ? .35 : .16 });
+    const percent = clamp(Number(computed.percent ?? region.percent ?? 0), 0, 100);
+    const halo = new Graphics().circle(0, 0, 62).fill({ color: stateColor(computed.state, scene), alpha: computed.state === "mastered" ? .42 : .18 });
     const base = new Graphics().ellipse(0, 16, 96, 44).fill({ color: scene.palette.shadow, alpha: .6 });
     const building = drawLandmark(scene, index, computed.state);
-    container.addChild(halo, base, building);
+    const ring = new Graphics().circle(0, 0, 64).stroke({ color: 0x111611, width: 7, alpha: .22 });
+    if (percent > 0) ring.arc(0, 0, 64, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * percent / 100).stroke({ color: stateColor(computed.state, scene), width: 7, alpha: .92 });
+    container.addChild(halo, ring, base, building);
     if (computed.state === "mastered") {
       const crown = new Graphics().circle(0, -55, 8).fill(scene.palette.accent);crown.circle(0, -55, 17).stroke({ color: 0xfff0b0, width: 3, alpha: .85 });container.addChild(crown);
     }
@@ -249,8 +297,13 @@ class TrainingGameMap {
 
   drawPortal(scene, map) {
     const g = new Graphics();
+    if (map.mastered) {
+      g.circle(scene.portal.x, scene.portal.y, 76).fill({ color: scene.palette.accent, alpha: .12 });
+      g.circle(scene.portal.x, scene.portal.y, 60).stroke({ color: 0xfff0b0, width: 4, alpha: .45 });
+    }
     g.circle(scene.portal.x, scene.portal.y, 52).stroke({ color: map.mastered ? scene.palette.accent : 0x6e716b, width: 12, alpha: .9 });
     g.circle(scene.portal.x, scene.portal.y, 34).fill({ color: map.mastered ? scene.palette.accent : scene.palette.shadow, alpha: .32 });
+    g.circle(scene.portal.x, scene.portal.y, 18).stroke({ color: map.mastered ? 0xffffff : 0x9b9b8e, width: 2, alpha: map.mastered ? .55 : .22 });
     g.rect(scene.portal.x - 64, scene.portal.y + 48, 128, 20).fill({ color: scene.palette.shadow, alpha: .85 });
     this.world.addChild(g);
     this.createLabel({ x: scene.portal.x, y: scene.portal.y + 92, title: map.mastered ? "守门人传送门" : "地图守门关", meta: map.mastered ? "可选综合挑战已经开放" : "核心据点全部点亮后开启", state: map.mastered ? "mastered" : "locked", onClick: () => map.mastered ? this.onGuardianSelect?.(map) : this.onLockedMap?.(map) });
@@ -262,6 +315,9 @@ class TrainingGameMap {
     const g = new Graphics().ellipse(x, y + 23, 70, 24).fill({ color: scene.palette.shadow, alpha: .5 });
     g.poly([x - 18, y + 15, x, y - 35 - temp * .16, x + 19, y + 15]).fill({ color: temp > 35 ? 0xff9c47 : 0xa86b4c, alpha: .9 });
     g.poly([x - 9, y + 10, x, y - 15 - temp * .08, x + 10, y + 10]).fill({ color: 0xffe47c, alpha: temp > 0 ? .9 : .25 });
+    if (temp > 0 && !reducedMotion()) {
+      for (let i = 0; i < 7; i++) g.circle(x - 22 + i * 8, y - 24 - (i % 3) * 13, 2 + i % 2).fill({ color: 0xffd07a, alpha: .25 + Math.min(temp, 90) / 260 });
+    }
     this.world.addChild(g);
   }
 
@@ -337,7 +393,7 @@ class TrainingGameMap {
   resetCamera(){const size=this.mode==="world"?WORLD_SIZE:this.scene;this.fitScene(size.width,size.height,true);}
   constrainCamera(){const size=this.mode==="world"?WORLD_SIZE:this.scene;if(!size)return;const w=this.host.clientWidth,h=this.host.clientHeight,s=this.camera.targetScale;const pad=90;this.camera.targetX=clamp(this.camera.targetX,Math.min(pad,w-size.width*s-pad),pad);this.camera.targetY=clamp(this.camera.targetY,Math.min(pad,h-size.height*s-pad),pad);}
 
-  addParticles(type,count){if(reducedMotion())return;for(let i=0;i<count;i++){const g=new Graphics().circle(0,0,1.5+(i%3)).fill({color:type==="abyss"?0xff855e:type==="space"?0xe2ccff:0xffffff,alpha:.25+(i%4)*.1});g.position.set((i*283)%1600,(i*157)%900);g.__speed=.018+(i%5)*.008;g.__drift=(i%2?1:-1)*.011;this.particles.push(g);this.world.addChild(g);}}
+  addParticles(type,count){if(reducedMotion())return;for(let i=0;i<count;i++){const color=type==="abyss"?0xff855e:type==="space"?0xe2ccff:type==="desert"?0xf5d18b:type==="mountain"?0xffffff:type==="coast"?0xcfefff:0xffffff;const g=new Graphics();if(type==="desert")g.ellipse(0,0,4+(i%4)*2,1.4).fill({color,alpha:.18+(i%4)*.05});else if(type==="coast")g.circle(0,0,1.2+(i%3)).stroke({color,alpha:.18+(i%4)*.06,width:1});else g.circle(0,0,1.5+(i%3)).fill({color,alpha:.25+(i%4)*.1});g.position.set((i*283)%1600,(i*157)%900);g.__speed=.018+(i%5)*.008;g.__drift=(i%2?1:-1)*(.011+(type==="desert"?.018:0));this.particles.push(g);this.world.addChild(g);}}
   particleCount(){if(this.effectsQuality==="low"||innerWidth<700)return 10;return this.effectsQuality==="high"?46:26;}
 
   tick(deltaMS){
