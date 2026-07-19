@@ -222,6 +222,25 @@ export async function fetchPublicProfile(idOrHandle) {
   query = /^[0-9a-f-]{36}$/i.test(idOrHandle) ? query.eq("id", idOrHandle) : query.eq("handle", idOrHandle.replace(/^@/, "").toLowerCase());
   const { data, error } = await query.maybeSingle(); fail(error); return data;
 }
+export async function fetchProfileSocial(targetId, limit = 60) {
+  const capped = Math.min(Math.max(Number(limit) || 60, 1), 100);
+  const [{ data: followingRows, error: followingError }, { data: followerRows, error: followerError }] = await Promise.all([
+    supabase.from("user_follows").select("following_id,created_at").eq("follower_id", targetId).order("created_at", { ascending: false }).limit(capped),
+    supabase.from("user_follows").select("follower_id,created_at").eq("following_id", targetId).order("created_at", { ascending: false }).limit(capped)
+  ]);
+  fail(followingError); fail(followerError);
+  const followingIds = (followingRows || []).map(row => row.following_id);
+  const followerIds = (followerRows || []).map(row => row.follower_id);
+  const profiles = await profilesByIds([...followingIds, ...followerIds]);
+  const shape = (id, createdAt) => {
+    const profile = profiles.get(id);
+    return profile ? { ...profile, followed_at: createdAt } : null;
+  };
+  return {
+    following: (followingRows || []).map(row => shape(row.following_id, row.created_at)).filter(Boolean),
+    followers: (followerRows || []).map(row => shape(row.follower_id, row.created_at)).filter(Boolean)
+  };
+}
 
 export async function fetchAdminUsers(search = "") {
   const { data, error } = await supabase.rpc("admin_list_users", { search_query: searchTerm(search) }); fail(error); return data || [];
