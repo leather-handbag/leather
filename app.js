@@ -44,6 +44,35 @@ const trainingWorld = createTrainingWorld({ api, $, $$, esc, toast, nowText, ope
 // Navigation
 const titles = { home: "首页", vault: "模板库", stress: "代码对拍", roadmap: "任务导图", "training-world": "算法远征", blogs: "我的博客", "blog-editor": "博客编辑器", favorites: "我的收藏", square: "文章广场", discussion: "讨论区", article: "阅读文章", account: "我的主页", settings: "设置", checkin: "每日签到", leaderboard: "排行榜", profile: "个人主页", admin: "管理后台" };
 const protectedPages = new Set(["vault", "stress", "roadmap", "blogs", "blog-editor", "favorites", "checkin", "settings", "admin"]);
+const navGroups = [
+  { title: "总览", items: [["home","⌂","首页"], ["training-world","♜","算法远征"], ["leaderboard","♛","排行榜"]] },
+  { title: "训练工具", items: [["vault","◈","模板库"], ["stress","⚖","代码对拍"], ["roadmap","◎","任务导图"]] },
+  { title: "内容社区", items: [["blogs","✎","我的博客"], ["favorites","♥","我的收藏"], ["square","▣","文章广场"], ["discussion","☷","讨论区"]] },
+  { title: "账户", items: [["checkin","◉","每日签到"], ["account","♙","个人中心"], ["admin","⚙","管理后台"]] }
+];
+function enhanceShell() {
+  const nav = $(".main-nav");
+  if (nav && !nav.dataset.enhanced) {
+    const old = new Map($$("a[data-page]", nav).map(link => [link.dataset.page, link]));
+    nav.replaceChildren();
+    for (const group of navGroups) {
+      const label = document.createElement("span");
+      label.className = "nav-section-label"; label.textContent = group.title; nav.append(label);
+      for (const [page, icon, text] of group.items) {
+        const link = old.get(page) || document.createElement("a");
+        link.href = `#${page}`; link.dataset.page = page; if (page === "admin") link.id = "adminNav";
+        link.innerHTML = `<span class="nav-icon">${icon}</span><span>${text}</span>`;
+        nav.append(link);
+      }
+    }
+    nav.dataset.enhanced = "true";
+  }
+  const home = $("#page-home");
+  if (home && !$(".home-command-center", home)) {
+    home.insertAdjacentHTML("afterbegin", `<section class="home-command-center"><div><span class="eyebrow">COMMAND CENTER</span><h2>今天从哪里开始</h2><p data-home-status="caption">登录后会显示你的等级分、签到、公开主页和训练入口。</p></div><div class="home-status-grid"><a href="#account"><b data-home-status="name">访客模式</b><small data-home-status="handle">登录后同步数据</small></a><a href="#training-world"><b data-home-status="training">算法远征</b><small>查看地图、热力图与推荐</small></a><a href="#roadmap"><b data-home-status="roadmap">任务导图</b><small>安排手动训练计划</small></a><a href="#square"><b data-home-status="community">文章广场</b><small>阅读题解与训练总结</small></a></div></section>`);
+  }
+}
+enhanceShell();
 function route() {
   const path = location.hash.slice(1) || "home";
   const [name, id = ""] = path.split("/");
@@ -1183,6 +1212,12 @@ function applyAuthState() {
   $("#sidebarStatusTitle").textContent = profile?.banned_at ? "账号已封禁" : active ? "云端已同步" : "访客只读";
   $("#sidebarStatusText").textContent = profile?.banned_at ? (profile.ban_reason || "写入权限已停用") : active ? `@${profile.handle}` : "登录后可保存与发布";
   $("#saveState").innerHTML = `<i></i>${profile?.banned_at ? "账号封禁" : active ? "Supabase 已连接" : configured ? "访客只读" : "等待配置"}`;
+  $('[data-home-status="name"]')?.replaceChildren(signed ? (profile?.display_name || "已登录") : "访客模式");
+  $('[data-home-status="handle"]')?.replaceChildren(signed ? `@${profile?.handle || api.cloud.user.email}` : "登录后同步数据");
+  $('[data-home-status="caption"]')?.replaceChildren(profile?.banned_at ? `账号已封禁：${profile.ban_reason || "写入权限已停用"}` : active ? `等级分 ${Number(api.cloud.stats?.score || 0)} · 签到 ${Number(api.cloud.stats?.checkin_count || 0)} 次 · 进入任一模块继续训练。` : "当前可浏览公开文章、排行榜和个人主页；登录后可保存模板、计划与博客。");
+  $('[data-home-status="training"]')?.replaceChildren(active ? "进入算法远征" : "浏览公开远征");
+  $('[data-home-status="roadmap"]')?.replaceChildren(active ? "整理训练计划" : "登录后使用计划");
+  $('[data-home-status="community"]')?.replaceChildren(active ? "写作与社区" : "阅读公开文章");
   $("#stationCommentAuthor").value = active ? profile.display_name : "";
   renderAccount();
 }
